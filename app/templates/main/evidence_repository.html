@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h2 fw-bold text-dark mb-1">Evidence Repository</h1>
+                    <p class="text-muted mb-0">Manage and view your uploaded compliance documents</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-plus-lg me-2"></i>Upload New
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Documents Section -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-folder2-open me-2 text-primary"></i>
+                            Your Documents ({{ documents|length }})
+                        </h5>
+                        {% if documents %}
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-secondary" onclick="toggleView()">
+                                    <i class="bi bi-grid-3x3-gap" id="viewToggleIcon"></i>
+                                </button>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if documents %}
+                        <!-- Table View (Default) -->
+                        <div id="tableView">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th scope="col" class="border-0">
+                                                <i class="bi bi-file-earmark me-1"></i>Document
+                                            </th>
+                                            <th scope="col" class="border-0">
+                                                <i class="bi bi-hdd me-1"></i>Size
+                                            </th>
+                                            <th scope="col" class="border-0">
+                                                <i class="bi bi-calendar me-1"></i>Upload Date
+                                            </th>
+                                            <th scope="col" class="border-0">
+                                                <i class="bi bi-gear me-1"></i>Actions
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for document in documents %}
+                                            <tr>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="flex-shrink-0 me-3">
+                                                            {% if document.content_type == 'application/pdf' %}
+                                                                <i class="bi bi-file-earmark-pdf text-danger" style="font-size: 1.5rem;"></i>
+                                                            {% else %}
+                                                                <i class="bi bi-file-earmark-word text-primary" style="font-size: 1.5rem;"></i>
+                                                            {% endif %}
+                                                        </div>
+                                                        <div class="flex-grow-1 min-w-0">
+                                                            <div class="fw-medium text-truncate">{{ document.original_filename }}</div>
+                                                            <small class="text-muted">
+                                                                {% if document.content_type == 'application/pdf' %}
+                                                                    PDF Document
+                                                                {% else %}
+                                                                    Word Document
+                                                                {% endif %}
+                                                            </small>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-light text-dark">
+                                                        {{ document.get_file_size_formatted() }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div>{{ document.uploaded_at.strftime('%b %d, %Y') }}</div>
+                                                    <small class="text-muted">{{ document.uploaded_at.strftime('%I:%M %p') }}</small>
+                                                </td>
+                                                <td>
+                                                    <div class="dropdown">
+                                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                                                type="button" data-bs-toggle="dropdown">
+                                                            <i class="bi bi-three-dots"></i>
+                                                        </button>
+                                                        <ul class="dropdown-menu">
+                                                            <li>
+                                                                <a class="dropdown-item" href="#" onclick="showComingSoon('Download')">
+                                                                    <i class="bi bi-download me-2"></i>Download
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="#" onclick="showComingSoon('View Details')">
+                                                                    <i class="bi bi-info-circle me-2"></i>View Details
+                                                                </a>
+                                                            </li>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li>
+                                                                <a class="dropdown-item text-danger" href="#" onclick="showComingSoon('Delete')">
+                                                                    <i class="bi bi-trash me-2"></i>Delete
+                                                                </a>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Grid View (Hidden by default) -->
+                        <div id="gridView" style="display: none;">
+                            <div class="row g-3">
+                                {% for document in documents %}
+                                    <div class="col-md-6 col-lg-4 col-xl-3">
+                                        <div class="card h-100 border shadow-sm">
+                                            <div class="card-body text-center">
+                                                <div class="mb-3">
+                                                    {% if document.content_type == 'application/pdf' %}
+                                                        <i class="bi bi-file-earmark-pdf text-danger" style="font-size: 3rem;"></i>
+                                                    {% else %}
+                                                        <i class="bi bi-file-earmark-word text-primary" style="font-size: 3rem;"></i>
+                                                    {% endif %}
+                                                </div>
+                                                <h6 class="card-title text-truncate" title="{{ document.original_filename }}">
+                                                    {{ document.original_filename }}
+                                                </h6>
+                                                <p class="card-text">
+                                                    <small class="text-muted">
+                                                        {{ document.get_file_size_formatted() }} • 
+                                                        {{ document.uploaded_at.strftime('%b %d, %Y') }}
+                                                    </small>
+                                                </p>
+                                                <div class="dropdown">
+                                                    <button class="btn btn-sm btn-outline-primary dropdown-toggle" 
+                                                            type="button" data-bs-toggle="dropdown">
+                                                        Actions
+                                                    </button>
+                                                    <ul class="dropdown-menu">
+                                                        <li>
+                                                            <a class="dropdown-item" href="#" onclick="showComingSoon('Download')">
+                                                                <i class="bi bi-download me-2"></i>Download
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item" href="#" onclick="showComingSoon('View Details')">
+                                                                <i class="bi bi-info-circle me-2"></i>View Details
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Empty State -->
+                        <div class="text-center py-5">
+                            <div class="mb-4">
+                                <i class="bi bi-inbox text-muted" style="font-size: 5rem; opacity: 0.3;"></i>
+                            </div>
+                            <h5 class="fw-bold text-muted mb-3">No Documents Found</h5>
+                            <p class="text-muted mb-4">
+                                You haven't uploaded any documents yet. Start building your compliance repository 
+                                by uploading your first document.
+                            </p>
+                            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary btn-lg">
+                                <i class="bi bi-plus-lg me-2"></i>Upload Your First Document
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% if documents %}
+        <!-- Summary Stats -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <div class="mb-2">
+                                    <i class="bi bi-files text-primary" style="font-size: 1.5rem;"></i>
+                                </div>
+                                <div class="fw-bold h5 mb-0">{{ documents|length }}</div>
+                                <small class="text-muted">Total Documents</small>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-2">
+                                    <i class="bi bi-file-earmark-pdf text-danger" style="font-size: 1.5rem;"></i>
+                                </div>
+                                <div class="fw-bold h5 mb-0">
+                                    {{ documents|selectattr('content_type', 'equalto', 'application/pdf')|list|length }}
+                                </div>
+                                <small class="text-muted">PDF Files</small>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-2">
+                                    <i class="bi bi-file-earmark-word text-primary" style="font-size: 1.5rem;"></i>
+                                </div>
+                                <div class="fw-bold h5 mb-0">
+                                    {{ documents|rejectattr('content_type', 'equalto', 'application/pdf')|list|length }}
+                                </div>
+                                <small class="text-muted">Word Files</small>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-2">
+                                    <i class="bi bi-shield-check text-success" style="font-size: 1.5rem;"></i>
+                                </div>
+                                <div class="fw-bold h5 mb-0">100%</div>
+                                <small class="text-muted">Secure</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let isGridView = false;
+    
+    function toggleView() {
+        const tableView = document.getElementById('tableView');
+        const gridView = document.getElementById('gridView');
+        const toggleIcon = document.getElementById('viewToggleIcon');
+        
+        if (isGridView) {
+            // Switch to table view
+            tableView.style.display = 'block';
+            gridView.style.display = 'none';
+            toggleIcon.className = 'bi bi-grid-3x3-gap';
+            isGridView = false;
+        } else {
+            // Switch to grid view
+            tableView.style.display = 'none';
+            gridView.style.display = 'block';
+            toggleIcon.className = 'bi bi-list';
+            isGridView = true;
+        }
+    }
+</script>
+{% endblock %}

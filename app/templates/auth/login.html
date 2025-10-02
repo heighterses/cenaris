@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<div class="min-vh-100 d-flex align-items-center" style="background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+                <div class="card fade-in">
+                    <div class="card-body p-5">
+                        <!-- Header -->
+                        <div class="text-center mb-4">
+                            <div class="mb-3">
+                                <i class="bi bi-shield-check text-primary" style="font-size: 3rem;"></i>
+                            </div>
+                            <h1 class="h3 mb-2 fw-bold text-dark">Welcome Back</h1>
+                            <p class="text-muted">Sign in to your compliance management account</p>
+                        </div>
+                        
+                        <!-- Login Form -->
+                        <form method="POST" novalidate>
+                            {{ form.hidden_tag() }}
+                            
+                            <!-- Email Field -->
+                            <div class="mb-3">
+                                {{ form.email.label(class="form-label") }}
+                                {{ form.email() }}
+                                {% if form.email.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.email.errors %}
+                                            <small class="text-danger">
+                                                <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                            </small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Password Field -->
+                            <div class="mb-3">
+                                {{ form.password.label(class="form-label") }}
+                                <div class="position-relative">
+                                    {{ form.password() }}
+                                    <button type="button" class="btn btn-link position-absolute end-0 top-50 translate-middle-y pe-3" 
+                                            onclick="togglePassword('password')" style="border: none; background: none;">
+                                        <i class="bi bi-eye" id="password-toggle-icon"></i>
+                                    </button>
+                                </div>
+                                {% if form.password.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.password.errors %}
+                                            <small class="text-danger">
+                                                <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                            </small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Remember Me -->
+                            <div class="mb-4">
+                                <div class="form-check">
+                                    {{ form.remember_me() }}
+                                    {{ form.remember_me.label(class="form-check-label") }}
+                                </div>
+                            </div>
+                            
+                            <!-- Submit Button -->
+                            <div class="d-grid mb-3">
+                                {{ form.submit() }}
+                            </div>
+                        </form>
+                        
+                        <!-- Divider -->
+                        <div class="text-center mb-3">
+                            <hr class="my-4">
+                            <span class="text-muted small">Don't have an account?</span>
+                        </div>
+                        
+                        <!-- Sign Up Link -->
+                        <div class="d-grid">
+                            <a href="{{ url_for('auth.signup') }}" class="btn btn-outline-primary">
+                                <i class="bi bi-person-plus me-2"></i>Create New Account
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Security Notice -->
+                <div class="text-center mt-4">
+                    <small class="text-muted">
+                        <i class="bi bi-lock me-1"></i>
+                        Your data is protected with enterprise-grade security
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function togglePassword(fieldId) {
+        const passwordField = document.getElementById(fieldId);
+        const toggleIcon = document.getElementById(fieldId + '-toggle-icon');
+        
+        if (passwordField.type === 'password') {
+            passwordField.type = 'text';
+            toggleIcon.className = 'bi bi-eye-slash';
+        } else {
+            passwordField.type = 'password';
+            toggleIcon.className = 'bi bi-eye';
+        }
+    }
+    
+    // Focus on first input field
+    document.addEventListener('DOMContentLoaded', function() {
+        const firstInput = document.querySelector('input[type="email"]');
+        if (firstInput) {
+            firstInput.focus();
+        }
+    });
+</script>
+{% endblock %}

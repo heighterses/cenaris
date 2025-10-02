@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="bg-primary text-white">
+    <div class="container py-5">
+        <div class="row align-items-center min-vh-75">
+            <div class="col-lg-6">
+                <div class="fade-in">
+                    <h1 class="display-4 fw-bold mb-4">
+                        Professional Compliance Document Management
+                    </h1>
+                    <p class="lead mb-4">
+                        Securely store, manage, and track your compliance documents with our enterprise-grade 
+                        document management system. Built for professionals who demand security and reliability.
+                    </p>
+                    <div class="d-flex flex-column flex-sm-row gap-3">
+                        <a href="{{ url_for('auth.signup') }}" class="btn btn-light btn-lg px-4">
+                            <i class="bi bi-person-plus me-2"></i>Get Started
+                        </a>
+                        <a href="{{ url_for('auth.login') }}" class="btn btn-outline-light btn-lg px-4">
+                            <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="text-center">
+                    <i class="bi bi-shield-check" style="font-size: 12rem; opacity: 0.1;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Features Section -->
+<div class="container py-5">
+    <div class="row">
+        <div class="col-12 text-center mb-5">
+            <h2 class="h1 fw-bold text-dark mb-3">Why Choose Our Platform?</h2>
+            <p class="lead text-muted">Built specifically for compliance professionals with enterprise-grade security</p>
+        </div>
+    </div>
+    
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3">
+                        <i class="bi bi-cloud-upload text-primary" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="fw-bold mb-3">Secure Cloud Storage</h5>
+                    <p class="text-muted">
+                        Upload and store your compliance documents securely in Azure Blob Storage 
+                        with enterprise-grade encryption and access controls.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3">
+                        <i class="bi bi-folder-check text-primary" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="fw-bold mb-3">Document Management</h5>
+                    <p class="text-muted">
+                        Organize, track, and manage your compliance evidence with our intuitive 
+                        document repository and metadata management system.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3">
+                        <i class="bi bi-shield-lock text-primary" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="fw-bold mb-3">Compliance Ready</h5>
+                    <p class="text-muted">
+                        Built with compliance in mind, featuring audit trails, access controls, 
+                        and security measures that meet regulatory requirements.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Coming Soon Features -->
+<div class="bg-light py-5">
+    <div class="container">
+        <div class="row">
+            <div class="col-12 text-center mb-5">
+                <h2 class="h1 fw-bold text-dark mb-3">Coming Soon</h2>
+                <p class="lead text-muted">Advanced features to enhance your compliance workflow</p>
+            </div>
+        </div>
+        
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-3">
+                <div class="text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-robot text-muted" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h6 class="fw-bold">AI Evidence Analysis</h6>
+                    <small class="text-muted">Intelligent document analysis and insights</small>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3">
+                <div class="text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-graph-up text-muted" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h6 class="fw-bold">Gap Analysis</h6>
+                    <small class="text-muted">Identify compliance gaps and recommendations</small>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3">
+                <div class="text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-download text-muted" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h6 class="fw-bold">Audit Export</h6>
+                    <small class="text-muted">Generate comprehensive audit reports</small>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3">
+                <div class="text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-people text-muted" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h6 class="fw-bold">User Roles</h6>
+                    <small class="text-muted">Advanced user management and permissions</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CTA Section -->
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 text-center">
+            <h2 class="h1 fw-bold text-dark mb-3">Ready to Get Started?</h2>
+            <p class="lead text-muted mb-4">
+                Join professionals who trust our platform for their compliance document management needs.
+            </p>
+            <a href="{{ url_for('auth.signup') }}" class="btn btn-primary btn-lg px-5">
+                <i class="bi bi-person-plus me-2"></i>Create Your Account
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
