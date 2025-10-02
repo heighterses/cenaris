@@ -76,4 +76,18 @@ def create_app(config_name=None):
         from flask_wtf.csrf import generate_csrf
         return dict(csrf_token=generate_csrf)
     
+    # Add custom template filters
+    @app.template_filter('datetime_format')
+    def datetime_format(value, format='%b %d, %Y at %I:%M %p'):
+        """Format datetime for templates."""
+        from datetime import datetime
+        if isinstance(value, str):
+            try:
+                value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            except:
+                return 'Unknown date'
+        if isinstance(value, datetime):
+            return value.strftime(format)
+        return 'Unknown date'
+    
     return app
