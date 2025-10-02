@@ -172,7 +172,7 @@
                                         <div class="flex-grow-1 min-w-0">
                                             <div class="fw-medium text-truncate">{{ document.original_filename }}</div>
                                             <small class="text-muted">
-                                                {{ document.uploaded_at.strftime('%b %d, %Y at %I:%M %p') }}
+                                                {{ document.uploaded_at | datetime_format('%b %d, %Y at %I:%M %p') }}
                                             </small>
                                         </div>
                                     </div>

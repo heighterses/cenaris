@@ -1,6 +1,6 @@
 import sqlite3
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from flask import current_app
@@ -13,7 +13,7 @@ class User(UserMixin):
         self.id = id
         self.email = email
         self.password_hash = password_hash
-        self.created_at = created_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(timezone.utc)
         self._is_active = is_active
     
     @property
@@ -177,7 +177,7 @@ class Document:
         self.file_size = file_size
         self.content_type = content_type
         self.uploaded_by = uploaded_by
-        self.uploaded_at = uploaded_at or datetime.utcnow()
+        self.uploaded_at = uploaded_at or datetime.now(timezone.utc)
         self.is_active = is_active
     
     @staticmethod
@@ -235,6 +235,14 @@ class Document:
             
             row = cursor.fetchone()
             if row:
+                # Convert uploaded_at string to datetime if needed
+                uploaded_at = row[7]
+                if isinstance(uploaded_at, str):
+                    try:
+                        uploaded_at = datetime.fromisoformat(uploaded_at.replace('Z', '+00:00'))
+                    except:
+                        uploaded_at = datetime.now(timezone.utc)
+                
                 return cls(
                     id=row[0],
                     filename=row[1],
@@ -243,7 +251,7 @@ class Document:
                     file_size=row[4],
                     content_type=row[5],
                     uploaded_by=row[6],
-                    uploaded_at=row[7],
+                    uploaded_at=uploaded_at,
                     is_active=bool(row[8])
                 )
             return None
@@ -275,6 +283,14 @@ class Document:
             
             documents = []
             for row in cursor.fetchall():
+                # Convert uploaded_at string to datetime if needed
+                uploaded_at = row[7]
+                if isinstance(uploaded_at, str):
+                    try:
+                        uploaded_at = datetime.fromisoformat(uploaded_at.replace('Z', '+00:00'))
+                    except:
+                        uploaded_at = datetime.now(timezone.utc)
+                
                 documents.append(cls(
                     id=row[0],
                     filename=row[1],
@@ -283,7 +299,7 @@ class Document:
                     file_size=row[4],
                     content_type=row[5],
                     uploaded_by=row[6],
-                    uploaded_at=row[7],
+                    uploaded_at=uploaded_at,
                     is_active=bool(row[8])
                 ))
             
@@ -318,6 +334,14 @@ class Document:
             
             documents = []
             for row in cursor.fetchall():
+                # Convert uploaded_at string to datetime if needed
+                uploaded_at = row[7]
+                if isinstance(uploaded_at, str):
+                    try:
+                        uploaded_at = datetime.fromisoformat(uploaded_at.replace('Z', '+00:00'))
+                    except:
+                        uploaded_at = datetime.now(timezone.utc)
+                
                 doc = cls(
                     id=row[0],
                     filename=row[1],
@@ -326,7 +350,7 @@ class Document:
                     file_size=row[4],
                     content_type=row[5],
                     uploaded_by=row[6],
-                    uploaded_at=row[7],
+                    uploaded_at=uploaded_at,
                     is_active=bool(row[8])
                 )
                 doc.uploader_email = row[9]  # Add uploader email for display

@@ -5,7 +5,7 @@ from app.upload import bp
 from app.services.azure_storage import AzureBlobStorageService
 from app.services.file_validation import FileValidationService
 from app.models import Document
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -42,8 +42,8 @@ def upload_file():
             logger.error("Azure Storage not configured for file upload")
             return redirect(url_for('main.dashboard'))
         
-        # Generate unique blob name
-        blob_name = storage_service.generate_blob_name(
+        # Generate unique file path for ADLS
+        file_path = storage_service.generate_blob_name(
             validation_result['original_filename'], 
             current_user.id
         )
@@ -53,16 +53,16 @@ def upload_file():
             'uploaded_by': str(current_user.id),
             'uploaded_by_email': current_user.email,
             'original_filename': validation_result['original_filename'],
-            'upload_timestamp': str(int(datetime.utcnow().timestamp()))
+            'upload_timestamp': str(int(datetime.now(timezone.utc).timestamp()))
         }
         
         # Reset file stream position
         file.stream.seek(0)
         
-        # Upload to Azure Blob Storage
+        # Upload to Azure Data Lake Storage
         upload_result = storage_service.upload_file(
             file_stream=file.stream,
-            blob_name=blob_name,
+            file_path=file_path,
             content_type=validation_result['content_type'],
             metadata=metadata
         )
@@ -77,24 +77,25 @@ def upload_file():
             document = Document.create_document(
                 filename=validation_result['safe_filename'],
                 original_filename=validation_result['original_filename'],
-                blob_name=blob_name,
+                blob_name=file_path,
                 file_size=validation_result['file_size'],
                 content_type=validation_result['content_type'],
                 uploaded_by=current_user.id
             )
             
             if document:
-                flash(f'File "{validation_result["original_filename"]}" uploaded successfully!', 'success')
-                logger.info(f"File uploaded successfully: {blob_name} by user {current_user.id}")
+                storage_type = upload_result.get('storage_type', 'ADLS_Gen2')
+                flash(f'File "{validation_result["original_filename"]}" uploaded successfully to {storage_type}!', 'success')
+                logger.info(f"File uploaded successfully: {file_path} by user {current_user.id} to {storage_type}")
             else:
                 # If database save failed, try to clean up the uploaded file
-                storage_service.delete_file(blob_name)
+                storage_service.delete_file(file_path)
                 flash('Upload failed: Unable to save file information.', 'error')
-                logger.error(f"Database save failed for uploaded file: {blob_name}")
+                logger.error(f"Database save failed for uploaded file: {file_path}")
         
         except Exception as e:
             # If database save failed, try to clean up the uploaded file
-            storage_service.delete_file(blob_name)
+            storage_service.delete_file(file_path)
             flash('Upload failed: Database error occurred.', 'error')
             logger.error(f"Database error during file upload: {e}")
         
