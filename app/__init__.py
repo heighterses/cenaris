@@ -21,6 +21,9 @@ def create_app(config_name=None):
     config[config_name].init_app(app)
     
     # Initialize extensions
+    from flask_wtf.csrf import CSRFProtect
+    csrf = CSRFProtect(app)
+    
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Please sign in to access this page.'
@@ -66,5 +69,11 @@ def create_app(config_name=None):
             )
             response.headers['Content-Security-Policy'] = csp
             return response
+    
+    # Add template context processors
+    @app.context_processor
+    def inject_csrf_token():
+        from flask_wtf.csrf import generate_csrf
+        return dict(csrf_token=generate_csrf)
     
     return app

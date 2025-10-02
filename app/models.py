@@ -14,7 +14,17 @@ class User(UserMixin):
         self.email = email
         self.password_hash = password_hash
         self.created_at = created_at or datetime.utcnow()
-        self.is_active = is_active
+        self._is_active = is_active
+    
+    @property
+    def is_active(self):
+        """Get the active status of the user."""
+        return self._is_active
+    
+    @is_active.setter
+    def is_active(self, value):
+        """Set the active status of the user."""
+        self._is_active = bool(value)
     
     def set_password(self, password):
         """Hash and set the user's password."""
@@ -133,13 +143,13 @@ class User(UserMixin):
                     UPDATE users 
                     SET email = ?, password_hash = ?, is_active = ?
                     WHERE id = ?
-                ''', (self.email, self.password_hash, self.is_active, self.id))
+                ''', (self.email, self.password_hash, self._is_active, self.id))
             else:
                 # Insert new user
                 cursor.execute('''
                     INSERT INTO users (email, password_hash, created_at, is_active)
                     VALUES (?, ?, ?, ?)
-                ''', (self.email, self.password_hash, self.created_at, self.is_active))
+                ''', (self.email, self.password_hash, self.created_at, self._is_active))
                 self.id = cursor.lastrowid
             
             conn.commit()
@@ -375,11 +385,12 @@ class Document:
             return "Unknown"
         
         # Convert bytes to human readable format
+        size = self.file_size
         for unit in ['B', 'KB', 'MB', 'GB']:
-            if self.file_size < 1024.0:
-                return f"{self.file_size:.1f} {unit}"
-            self.file_size /= 1024.0
-        return f"{self.file_size:.1f} TB"
+            if size < 1024.0:
+                return f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} TB"
     
     def __repr__(self):
         return f'<Document {self.filename}>'
