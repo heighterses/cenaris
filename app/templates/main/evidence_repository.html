@@ -7,8 +7,8 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h1 class="h2 fw-bold text-dark mb-1">Evidence Repository</h1>
-                    <p class="text-muted mb-0">Manage and view your uploaded compliance documents</p>
+                    <h1 class="h2 fw-bold mb-1">Evidence Repository</h1>
+                    <p class="text-body-secondary mb-0">Manage and view your uploaded compliance documents</p>
                 </div>
                 <div class="d-flex gap-2">
                     <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-primary">
@@ -23,7 +23,7 @@
     <div class="row">
         <div class="col-12">
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white border-bottom">
+                <div class="card-header bg-body-tertiary border-bottom">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">
                             <i class="bi bi-folder2-open me-2 text-primary"></i>
@@ -44,7 +44,7 @@
                         <div id="tableView">
                             <div class="table-responsive">
                                 <table class="table table-hover align-middle">
-                                    <thead class="table-light">
+                                    <thead>
                                         <tr>
                                             <th scope="col" class="border-0">
                                                 <i class="bi bi-file-earmark me-1"></i>Document
@@ -73,8 +73,8 @@
                                                             {% endif %}
                                                         </div>
                                                         <div class="flex-grow-1 min-w-0">
-                                                            <div class="fw-medium text-truncate">{{ document.original_filename }}</div>
-                                                            <small class="text-muted">
+                                                            <div class="fw-medium text-truncate">{{ document.filename }}</div>
+                                                            <small class="text-body-secondary">
                                                                 {% if document.content_type == 'application/pdf' %}
                                                                     PDF Document
                                                                 {% else %}
@@ -85,18 +85,18 @@
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <span class="badge bg-light text-dark">
-                                                        {{ document.get_file_size_formatted() }}
+                                                    <span class="badge bg-body-tertiary text-body border">
+                                                        {{ document.file_size | file_size_format }}
                                                     </span>
                                                 </td>
                                                 <td>
                                                     <div>{{ document.uploaded_at | datetime_format('%b %d, %Y') }}</div>
-                                                    <small class="text-muted">{{ document.uploaded_at | datetime_format('%I:%M %p') }}</small>
+                                                    <small class="text-body-secondary">{{ document.uploaded_at | datetime_format('%I:%M %p') }}</small>
                                                 </td>
                                                 <td>
                                                     <div class="dropdown">
                                                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
-                                                                type="button" data-bs-toggle="dropdown">
+                                                                type="button" data-bs-toggle="dropdown" data-doc-actions-dropdown>
                                                             <i class="bi bi-three-dots"></i>
                                                         </button>
                                                         <ul class="dropdown-menu">
@@ -112,7 +112,7 @@
                                                             </li>
                                                             <li><hr class="dropdown-divider"></li>
                                                             <li>
-                                                                <a class="dropdown-item text-danger" href="#" onclick="confirmDelete({{ document.id }}, '{{ document.original_filename }}'); return false;">
+                                                                <a class="dropdown-item text-danger" href="#" onclick="confirmDelete({{ document.id }}, '{{ document.filename }}'); return false;">
                                                                     <i class="bi bi-trash me-2"></i>Delete
                                                                 </a>
                                                             </li>
@@ -140,18 +140,18 @@
                                                         <i class="bi bi-file-earmark-word text-primary" style="font-size: 3rem;"></i>
                                                     {% endif %}
                                                 </div>
-                                                <h6 class="card-title text-truncate" title="{{ document.original_filename }}">
-                                                    {{ document.original_filename }}
+                                                <h6 class="card-title text-truncate" title="{{ document.filename }}">
+                                                    {{ document.filename }}
                                                 </h6>
                                                 <p class="card-text">
-                                                    <small class="text-muted">
-                                                        {{ document.get_file_size_formatted() }} • 
+                                                    <small class="text-body-secondary">
+                                                        {{ document.file_size | file_size_format }} • 
                                                         {{ document.uploaded_at | datetime_format('%b %d, %Y') }}
                                                     </small>
                                                 </p>
                                                 <div class="dropdown">
                                                     <button class="btn btn-sm btn-outline-primary dropdown-toggle" 
-                                                            type="button" data-bs-toggle="dropdown">
+                                                            type="button" data-bs-toggle="dropdown" data-doc-actions-dropdown>
                                                         Actions
                                                     </button>
                                                     <ul class="dropdown-menu">
@@ -167,7 +167,7 @@
                                                         </li>
                                                         <li><hr class="dropdown-divider"></li>
                                                         <li>
-                                                            <a class="dropdown-item text-danger" href="#" onclick="confirmDelete({{ document.id }}, '{{ document.original_filename }}'); return false;">
+                                                            <a class="dropdown-item text-danger" href="#" onclick="confirmDelete({{ document.id }}, '{{ document.filename }}'); return false;">
                                                                 <i class="bi bi-trash me-2"></i>Delete
                                                             </a>
                                                         </li>
@@ -183,10 +183,10 @@
                         <!-- Empty State -->
                         <div class="text-center py-5">
                             <div class="mb-4">
-                                <i class="bi bi-inbox text-muted" style="font-size: 5rem; opacity: 0.3;"></i>
+                                <i class="bi bi-inbox text-body-secondary" style="font-size: 5rem; opacity: 0.3;"></i>
                             </div>
-                            <h5 class="fw-bold text-muted mb-3">No Documents Found</h5>
-                            <p class="text-muted mb-4">
+                            <h5 class="fw-bold text-body-secondary mb-3">No Documents Found</h5>
+                            <p class="text-body-secondary mb-4">
                                 You haven't uploaded any documents yet. Start building your compliance repository 
                                 by uploading your first document.
                             </p>
@@ -212,7 +212,7 @@
                                     <i class="bi bi-files text-primary" style="font-size: 1.5rem;"></i>
                                 </div>
                                 <div class="fw-bold h5 mb-0">{{ documents|length }}</div>
-                                <small class="text-muted">Total Documents</small>
+                                <small class="text-body-secondary">Total Documents</small>
                             </div>
                             <div class="col-md-3">
                                 <div class="mb-2">
@@ -221,7 +221,7 @@
                                 <div class="fw-bold h5 mb-0">
                                     {{ documents|selectattr('content_type', 'equalto', 'application/pdf')|list|length }}
                                 </div>
-                                <small class="text-muted">PDF Files</small>
+                                <small class="text-body-secondary">PDF Files</small>
                             </div>
                             <div class="col-md-3">
                                 <div class="mb-2">
@@ -230,14 +230,14 @@
                                 <div class="fw-bold h5 mb-0">
                                     {{ documents|rejectattr('content_type', 'equalto', 'application/pdf')|list|length }}
                                 </div>
-                                <small class="text-muted">Word Files</small>
+                                <small class="text-body-secondary">Word Files</small>
                             </div>
                             <div class="col-md-3">
                                 <div class="mb-2">
                                     <i class="bi bi-shield-check text-success" style="font-size: 1.5rem;"></i>
                                 </div>
                                 <div class="fw-bold h5 mb-0">100%</div>
-                                <small class="text-muted">Secure</small>
+                                <small class="text-body-secondary">Secure</small>
                             </div>
                         </div>
                     </div>
@@ -273,6 +273,8 @@
     }
     
     function confirmDelete(docId, filename) {
+        const csrfToken = "{{ csrf_token() }}";
+        const deleteAction = "{{ url_for('main.delete_document', doc_id=0) }}".replace('/0/', `/${docId}/`);
         // Create Bootstrap modal for confirmation
         const modalHtml = `
             <div class="modal fade" id="deleteModal" tabindex="-1">
@@ -290,14 +292,15 @@
                             <div class="alert alert-warning">
                                 <strong>${filename}</strong>
                             </div>
-                            <p class="text-muted mb-0">
+                            <p class="text-body-secondary mb-0">
                                 <i class="bi bi-info-circle me-1"></i>
                                 This action cannot be undone.
                             </p>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <form method="POST" action="/document/${docId}/delete" style="display: inline;">
+                            <form method="POST" action="${deleteAction}" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="${csrfToken}" />
                                 <button type="submit" class="btn btn-danger">
                                     <i class="bi bi-trash me-1"></i>Delete Document
                                 </button>
@@ -326,5 +329,19 @@
             this.remove();
         });
     }
+
+    // Prevent dropdown menus from being clipped inside scroll/overflow containers.
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-doc-actions-dropdown]').forEach((toggle) => {
+            try {
+                bootstrap.Dropdown.getOrCreateInstance(toggle, {
+                    popperConfig: (defaultConfig) => ({
+                        ...defaultConfig,
+                        strategy: 'fixed',
+                    }),
+                });
+            } catch (e) { /* ignore */ }
+        });
+    });
 </script>
 {% endblock %}

@@ -5,10 +5,10 @@
     <div class="col-12">
       <div class="d-flex justify-content-between align-items-center">
         <div>
-          <h1 class="h2 fw-bold text-dark mb-1">
+          <h1 class="h2 fw-bold mb-1">
             Welcome back, {{ current_user.email.split('@')[0].title() }}
           </h1>
-          <p class="text-muted mb-0">
+          <p class="text-body-secondary mb-0">
             Manage your compliance documents securely and efficiently
           </p>
         </div>
@@ -25,7 +25,7 @@
   <!-- Stats Cards -->
   <div class="row mb-4">
     <div class="col-md-6 col-lg-3 mb-3">
-      <div class="card border-0 shadow-sm h-100">
+      <div class="card border-0 shadow h-100">
         <div class="card-body">
           <div class="d-flex align-items-center">
             <div class="flex-shrink-0">
@@ -38,7 +38,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ total_documents }}</div>
-              <div class="text-muted small">Total Documents</div>
+              <div class="text-body-secondary small">Total Documents</div>
             </div>
           </div>
         </div>
@@ -46,7 +46,7 @@
     </div>
 
     <div class="col-md-6 col-lg-3 mb-3">
-      <div class="card border-0 shadow-sm h-100">
+      <div class="card border-0 shadow h-100">
         <div class="card-body">
           <div class="d-flex align-items-center">
             <div class="flex-shrink-0">
@@ -59,7 +59,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ total_documents }}</div>
-              <div class="text-muted small">Stored Securely</div>
+              <div class="text-body-secondary small">Stored Securely</div>
             </div>
           </div>
         </div>
@@ -67,7 +67,7 @@
     </div>
 
     <div class="col-md-6 col-lg-3 mb-3">
-      <div class="card border-0 shadow-sm h-100">
+      <div class="card border-0 shadow h-100">
         <div class="card-body">
           <div class="d-flex align-items-center">
             <div class="flex-shrink-0">
@@ -79,8 +79,17 @@
               </div>
             </div>
             <div class="flex-grow-1 ms-3">
-              <div class="fw-bold h4 mb-0">{{ ml_summary.avg_compliancy_rate }}%</div>
-              <div class="text-muted small">ML Compliance Rate</div>
+              {% if not ml_enabled %}
+              <div class="fw-bold h4 mb-0">—</div>
+              <div class="mt-1"><span class="badge bg-body-tertiary text-body border">Coming soon</span></div>
+              {% elif skip_adls %}
+              <div class="placeholder-glow">
+                <span class="placeholder col-4"></span>
+              </div>
+              {% else %}
+              <div class="fw-bold h4 mb-0" id="mlComplianceRateValue">{{ ml_summary.avg_compliancy_rate }}%</div>
+              {% endif %}
+              <div class="text-body-secondary small">ML Compliance Rate</div>
             </div>
           </div>
         </div>
@@ -88,7 +97,7 @@
     </div>
 
     <div class="col-md-6 col-lg-3 mb-3">
-      <div class="card border-0 shadow-sm h-100">
+      <div class="card border-0 shadow h-100">
         <div class="card-body">
           <div class="d-flex align-items-center">
             <div class="flex-shrink-0">
@@ -100,8 +109,17 @@
               </div>
             </div>
             <div class="flex-grow-1 ms-3">
-              <div class="fw-bold h4 mb-0">{{ ml_summary.total_files }}</div>
-              <div class="text-muted small">ML Analysis Files</div>
+              {% if not ml_enabled %}
+              <div class="fw-bold h4 mb-0">—</div>
+              <div class="mt-1"><span class="badge bg-body-tertiary text-body border">Coming soon</span></div>
+              {% elif skip_adls %}
+              <div class="placeholder-glow">
+                <span class="placeholder col-3"></span>
+              </div>
+              {% else %}
+              <div class="fw-bold h4 mb-0" id="mlTotalFilesValue">{{ ml_summary.total_files }}</div>
+              {% endif %}
+              <div class="text-body-secondary small">ML Analysis Files</div>
             </div>
           </div>
         </div>
@@ -113,8 +131,8 @@
   <div class="row">
     <!-- Upload Section -->
     <div class="col-lg-8 mb-4">
-      <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white border-bottom">
+      <div class="card border-0 shadow h-100">
+        <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-cloud-upload me-2 text-primary"></i>Upload Documents
           </h5>
@@ -128,9 +146,9 @@
               ></i>
             </div>
             <h6 class="fw-bold mb-3">Upload Your Compliance Documents</h6>
-            <p class="text-muted mb-4">
-              Securely upload PDF and DOCX files to your compliance repository.
-              All files are encrypted and stored in Azure Blob Storage.
+            <p class="text-body-secondary mb-4">
+              Securely upload PDF, DOC, and DOCX files to your compliance repository.
+              All files are encrypted and stored securely.
             </p>
 
             <!-- Upload Form -->
@@ -152,7 +170,7 @@
                   class="form-control form-control-lg"
                   id="fileInput"
                   name="file"
-                  accept=".pdf,.docx"
+                  accept=".pdf,.doc,.docx"
                   required
                 />
               </div>
@@ -171,9 +189,9 @@
             </form>
 
             <div class="mt-3">
-              <small class="text-muted">
+              <small class="text-body-secondary">
                 <i class="bi bi-info-circle me-1"></i>
-                Supported formats: PDF, DOCX • Maximum file size: 16MB
+                Supported formats: PDF, DOC, DOCX • Maximum file size: 16MB
               </small>
             </div>
           </div>
@@ -183,8 +201,8 @@
 
     <!-- Recent Documents -->
     <div class="col-lg-4 mb-4">
-      <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white border-bottom">
+      <div class="card border-0 shadow h-100">
+        <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
               <i class="bi bi-clock-history me-2 text-primary"></i>Recent
@@ -220,7 +238,7 @@
                 <div class="flex-grow-1 min-w-0" style="overflow: hidden">
                   <div
                     class="fw-medium"
-                    title="{{ document.original_filename }}"
+                    title="{{ document.filename }}"
                     style="
                       white-space: nowrap;
                       overflow: hidden;
@@ -228,11 +246,11 @@
                       max-width: 100%;
                     "
                   >
-                    {{ document.original_filename }}
+                    {{ document.filename }}
                   </div>
-                  <small class="text-muted">
+                  <small class="text-body-secondary">
                     {{ document.uploaded_at | datetime_format('%b %d, %Y at
-                    %I:%M %p') }} • {{ current_user.email.split('@')[0] }}
+                    %I:%M %p') }} • {{ document.uploader.display_name() if document.uploader else 'Unknown' }}
                   </small>
                 </div>
               </div>
@@ -242,11 +260,11 @@
           {% else %}
           <div class="text-center py-4">
             <i
-              class="bi bi-inbox text-muted"
+              class="bi bi-inbox text-body-secondary"
               style="font-size: 3rem; opacity: 0.5"
             ></i>
-            <p class="text-muted mt-3 mb-0">No documents uploaded yet</p>
-            <small class="text-muted"
+            <p class="text-body-secondary mt-3 mb-0">No documents uploaded yet</p>
+            <small class="text-body-secondary"
               >Upload your first document to get started</small
             >
           </div>
@@ -256,22 +274,85 @@
     </div>
   </div>
 
-  <!-- ML Results Summary -->
-  {% if ml_summary.total_files > 0 %}
-  <div class="row mb-4">
+  <!-- ML Results Summary (progressive loading) -->
+  <div class="row mb-4" id="mlResultsSection">
     <div class="col-12">
-      <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom">
+      <div class="card border-0 shadow">
+        <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
               <i class="bi bi-cpu me-2 text-primary"></i>ML Compliance Analysis
             </h5>
-            <a href="{{ url_for('main.ml_results') }}" class="btn btn-sm btn-outline-primary">
-              View Details
-            </a>
+            {% if ml_enabled %}
+              <a href="{{ url_for('main.ml_results') }}" class="btn btn-sm btn-outline-primary">
+                View Details
+              </a>
+            {% else %}
+              <span class="badge bg-body-tertiary text-body border">Coming soon</span>
+            {% endif %}
           </div>
         </div>
-        <div class="card-body">
+        <div class="card-body" id="mlResultsBody">
+          {% if not ml_enabled %}
+          <div class="text-center py-4">
+            <i class="bi bi-clock-history text-body-secondary" style="font-size: 2.25rem; opacity: 0.6"></i>
+            <p class="text-body-secondary mt-3 mb-0">ML compliance insights are coming soon</p>
+            <small class="text-body-secondary">This section will populate automatically once analysis is enabled.</small>
+          </div>
+          {% elif skip_adls %}
+          <div class="row">
+            <div class="col-lg-8">
+              <div class="row g-3">
+                {% for _ in range(4) %}
+                <div class="col-md-6">
+                  <div class="border rounded p-3 h-100 placeholder-glow">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                      <div class="flex-grow-1">
+                        <span class="placeholder col-6"></span>
+                        <div><span class="placeholder col-8"></span></div>
+                      </div>
+                      <span class="placeholder col-3"></span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <span class="placeholder col-3"></span>
+                      <span class="placeholder col-4"></span>
+                    </div>
+                    <div class="progress mb-2" style="height: 6px;">
+                      <div class="progress-bar" style="width: 50%"></div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                      <span class="placeholder col-2"></span>
+                      <span class="placeholder col-2"></span>
+                      <span class="placeholder col-2"></span>
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="col-lg-4">
+              <div class="text-center placeholder-glow">
+                <div class="position-relative d-inline-block mb-3">
+                  <svg width="150" height="150">
+                    <circle cx="75" cy="75" r="60" fill="none" stroke="#e9ecef" stroke-width="15"/>
+                    <circle cx="75" cy="75" r="60" fill="none" stroke="#e9ecef" stroke-width="15"
+                            stroke-dasharray="188, 377" stroke-linecap="round" transform="rotate(-90 75 75)"/>
+                  </svg>
+                  <div class="position-absolute top-50 start-50 translate-middle text-center">
+                    <div class="h3 fw-bold mb-0 text-primary"><span class="placeholder col-4"></span></div>
+                    <small class="text-body-secondary">Overall</small>
+                  </div>
+                </div>
+                <div class="row g-2">
+                  <div class="col-4"><span class="placeholder col-6"></span></div>
+                  <div class="col-4"><span class="placeholder col-6"></span></div>
+                  <div class="col-4"><span class="placeholder col-6"></span></div>
+                </div>
+                <div class="mt-3 text-body-secondary small">Loading analysis…</div>
+              </div>
+            </div>
+          </div>
+          {% else %}
           <div class="row">
             <div class="col-lg-8">
               <div class="row g-3">
@@ -281,7 +362,7 @@
                     <div class="d-flex justify-content-between align-items-start mb-2">
                       <div class="flex-grow-1">
                         <h6 class="fw-bold mb-1">{{ file_summary.framework }}</h6>
-                        <small class="text-muted">{{ file_summary.file_name[:30] }}...</small>
+                        <small class="text-body-secondary">{{ file_summary.file_name[:30] }}...</small>
                       </div>
                       {% if file_summary.overall_status == 'Excellent' %}
                         <span class="badge bg-success">{{ file_summary.overall_status }}</span>
@@ -295,7 +376,7 @@
                     </div>
                     <div class="d-flex justify-content-between align-items-center mb-2">
                       <span class="fw-bold h5 mb-0">{{ file_summary.compliancy_rate }}%</span>
-                      <small class="text-muted">{{ file_summary.total_requirements }} requirements</small>
+                      <small class="text-body-secondary">{{ file_summary.total_requirements }} requirements</small>
                     </div>
                     <div class="progress mb-2" style="height: 6px;">
                       {% if file_summary.compliancy_rate >= 90 %}
@@ -329,89 +410,34 @@
                   </svg>
                   <div class="position-absolute top-50 start-50 translate-middle text-center">
                     <div class="h3 fw-bold mb-0 text-primary">{{ ml_summary.avg_compliancy_rate }}%</div>
-                    <small class="text-muted">Overall</small>
+                    <small class="text-body-secondary">Overall</small>
                   </div>
                 </div>
                 <div class="text-center">
                   <div class="row g-2">
                     <div class="col-4">
                       <div class="fw-bold text-success">{{ ml_summary.total_complete }}</div>
-                      <small class="text-muted d-block">Complete</small>
+                      <small class="text-body-secondary d-block">Complete</small>
                     </div>
                     <div class="col-4">
                       <div class="fw-bold text-warning">{{ ml_summary.total_needs_review }}</div>
-                      <small class="text-muted d-block">Review</small>
+                      <small class="text-body-secondary d-block">Review</small>
                     </div>
                     <div class="col-4">
                       <div class="fw-bold text-danger">{{ ml_summary.total_missing }}</div>
-                      <small class="text-muted d-block">Missing</small>
+                      <small class="text-body-secondary d-block">Missing</small>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+          {% endif %}
         </div>
       </div>
     </div>
   </div>
-  {% endif %}
 
-  <!-- Quick Actions -->
-  <div class="row">
-    <div class="col-12">
-      <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom">
-          <h5 class="card-title mb-0">
-            <i class="bi bi-lightning me-2 text-primary"></i>Quick Actions
-          </h5>
-        </div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-6 col-lg-3">
-              <a
-                href="{{ url_for('main.evidence_repository') }}"
-                class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3"
-              >
-                <i
-                  class="bi bi-folder2-open mb-2"
-                  style="font-size: 1.5rem"
-                ></i>
-                <span>Evidence Repository</span>
-              </a>
-            </div>
-            <div class="col-md-6 col-lg-3">
-              <a
-                href="{{ url_for('main.adls_connection') }}"
-                class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3 text-decoration-none"
-              >
-                <i class="bi bi-cloud mb-2" style="font-size: 1.5rem"></i>
-                <span>ADLS Connection</span>
-              </a>
-            </div>
-            <div class="col-md-6 col-lg-3">
-              <a
-                href="{{ url_for('main.gap_analysis') }}"
-                class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3 text-decoration-none"
-              >
-                <i class="bi bi-graph-up mb-2" style="font-size: 1.5rem"></i>
-                <span>Gap Analysis</span>
-              </a>
-            </div>
-            <div class="col-md-6 col-lg-3">
-              <a
-                href="{{ url_for('main.audit_export') }}"
-                class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3 text-decoration-none"
-              >
-                <i class="bi bi-download mb-2" style="font-size: 1.5rem"></i>
-                <span>Audit Export</span>
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 {% endblock %} {% block extra_js %}
 <script>
@@ -420,10 +446,16 @@
     const file = this.files[0];
     if (file) {
       const maxSize = 16 * 1024 * 1024; // 16MB
+      const allowedExtensions = ["pdf", "doc", "docx"];
       const allowedTypes = [
         "application/pdf",
+        "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       ];
+      const docxZipTypes = ["application/zip", "application/x-zip-compressed"];
+
+      const nameParts = (file.name || "").split(".");
+      const ext = (nameParts.length > 1 ? nameParts[nameParts.length - 1] : "").toLowerCase();
 
       if (file.size > maxSize) {
         alert("File size must be less than 16MB");
@@ -431,35 +463,200 @@
         return;
       }
 
-      if (!allowedTypes.includes(file.type)) {
-        alert("Only PDF and DOCX files are allowed");
+      // Some browsers/OS combos report empty or generic MIME types for Office files.
+      if (!allowedExtensions.includes(ext)) {
+        alert("Only PDF, DOC, and DOCX files are allowed");
+        this.value = "";
+        return;
+      }
+
+      if (file.type && file.type !== "application/octet-stream" && !allowedTypes.includes(file.type)) {
+        // Many browsers report DOCX as a ZIP file type.
+        if (ext === "docx" && docxZipTypes.includes(file.type)) {
+          return;
+        }
+        alert("Only PDF, DOC, and DOCX files are allowed");
         this.value = "";
         return;
       }
     }
   });
 
-  // Auto-refresh ML data every 2 minutes
-  {% if ml_summary.total_files > 0 %}
+  function escapeHtml(text) {
+    return String(text || '').replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[ch]));
+  }
+
+  function renderMlSummary(data) {
+    // Update stat cards if present
+    const rateEl = document.getElementById('mlComplianceRateValue');
+    if (rateEl) rateEl.textContent = `${data.avg_compliancy_rate || 0}%`;
+    const filesEl = document.getElementById('mlTotalFilesValue');
+    if (filesEl) filesEl.textContent = `${data.total_files || 0}`;
+
+    // Replace the ML results body with real content
+    const body = document.getElementById('mlResultsBody');
+    if (!body) return;
+
+    const fileSummaries = Array.isArray(data.file_summaries) ? data.file_summaries.slice(0, 4) : [];
+    const totalFiles = Number(data.total_files || 0);
+
+    if (totalFiles <= 0) {
+      body.innerHTML = `
+        <div class="text-center py-4">
+          <i class="bi bi-info-circle text-body-secondary" style="font-size: 2.25rem; opacity: 0.6"></i>
+          <p class="text-body-secondary mt-3 mb-0">No ML analysis files found yet</p>
+          <small class="text-body-secondary">Upload documents and run analysis to see results here</small>
+        </div>
+      `;
+      return;
+    }
+
+    const avg = Number(data.avg_compliancy_rate || 0);
+    const dash = Math.round((avg / 100) * 377);
+    const complete = Number(data.total_complete || 0);
+    const review = Number(data.total_needs_review || 0);
+    const missing = Number(data.total_missing || 0);
+
+    const cardsHtml = fileSummaries.map((fs) => {
+      const status = String(fs.overall_status || 'Unknown');
+      let badge = 'bg-danger';
+      if (status === 'Excellent') badge = 'bg-success';
+      else if (status === 'Good') badge = 'bg-info';
+      else if (status === 'Needs Attention') badge = 'bg-warning';
+
+      const rate = Number(fs.compliancy_rate || 0);
+      let bar = 'bg-danger';
+      if (rate >= 90) bar = 'bg-success';
+      else if (rate >= 70) bar = 'bg-info';
+      else if (rate >= 50) bar = 'bg-warning';
+
+      return `
+        <div class="col-md-6">
+          <div class="border rounded p-3 h-100">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div class="flex-grow-1">
+                <h6 class="fw-bold mb-1">${escapeHtml(fs.framework || 'Unknown')}</h6>
+                <small class="text-body-secondary">${escapeHtml((fs.file_name || '').slice(0, 30))}...</small>
+              </div>
+              <span class="badge ${badge}">${escapeHtml(status)}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-bold h5 mb-0">${rate}%</span>
+              <small class="text-body-secondary">${Number(fs.total_requirements || 0)} requirements</small>
+            </div>
+            <div class="progress mb-2" style="height: 6px;">
+              <div class="progress-bar ${bar}" style="width: ${Math.max(0, Math.min(100, rate))}%"></div>
+            </div>
+            <div class="d-flex justify-content-between">
+              <small class="text-success">✓ ${Number(fs.complete_count || 0)}</small>
+              <small class="text-warning">⏳ ${Number(fs.needs_review_count || 0)}</small>
+              <small class="text-danger">✗ ${Number(fs.missing_count || 0)}</small>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    body.innerHTML = `
+      <div class="row">
+        <div class="col-lg-8">
+          <div class="row g-3">
+            ${cardsHtml}
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="text-center">
+            <div class="position-relative d-inline-block mb-3">
+              <svg width="150" height="150">
+                <circle cx="75" cy="75" r="60" fill="none" stroke="#e9ecef" stroke-width="15"/>
+                <circle cx="75" cy="75" r="60" fill="none" stroke="#28a745" stroke-width="15"
+                        stroke-dasharray="${dash}, 377" stroke-linecap="round" transform="rotate(-90 75 75)"/>
+              </svg>
+              <div class="position-absolute top-50 start-50 translate-middle text-center">
+                <div class="h3 fw-bold mb-0 text-primary">${avg}%</div>
+                <small class="text-body-secondary">Overall</small>
+              </div>
+            </div>
+            <div class="row g-2">
+              <div class="col-4">
+                <div class="fw-bold text-success">${complete}</div>
+                <small class="text-body-secondary d-block">Complete</small>
+              </div>
+              <div class="col-4">
+                <div class="fw-bold text-warning">${review}</div>
+                <small class="text-body-secondary d-block">Review</small>
+              </div>
+              <div class="col-4">
+                <div class="fw-bold text-danger">${missing}</div>
+                <small class="text-body-secondary d-block">Missing</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Progressive-load ML data on first paint
+  {% if skip_adls and ml_enabled %}
+  fetch('{{ url_for("main.api_ml_summary") }}')
+    .then((r) => r.json())
+    .then((data) => {
+      renderMlSummary(data);
+      window.__mlSummarySnapshot = {
+        total_files: Number(data.total_files || 0),
+        last_updated: data.last_updated || null,
+      };
+    })
+    .catch(() => {
+      const body = document.getElementById('mlResultsBody');
+      if (body) {
+        body.innerHTML = `
+          <div class="alert alert-warning mb-0">
+            Could not load ML analysis data right now.
+          </div>
+        `;
+      }
+    });
+  {% endif %}
+
+  // Auto-refresh ML data every 2 minutes (preserve existing behavior)
+  {% if ml_enabled %}
+  window.__mlSummarySnapshot = window.__mlSummarySnapshot || {
+    total_files: Number({{ ml_summary.total_files or 0 }}),
+    last_updated: {% if ml_summary.last_updated %}'{{ ml_summary.last_updated.isoformat() }}'{% else %}null{% endif %}
+  };
+
   setInterval(() => {
     fetch('{{ url_for("main.api_ml_summary") }}')
       .then(response => response.json())
       .then(data => {
-        // Check if there are new results
-        if (data.total_files !== {{ ml_summary.total_files }} || 
-            data.last_updated !== '{{ ml_summary.last_updated.isoformat() }}') {
-          
-          // Show notification
+        const snapshot = window.__mlSummarySnapshot || { total_files: 0, last_updated: null };
+        const nextTotal = Number(data.total_files || 0);
+        const nextUpdated = data.last_updated || null;
+
+        // If we didn't have an initial snapshot (deferred), initialize it without reloading.
+        if (!snapshot.last_updated && nextUpdated) {
+          window.__mlSummarySnapshot = { total_files: nextTotal, last_updated: nextUpdated };
+          return;
+        }
+
+        if (snapshot.total_files !== nextTotal || (snapshot.last_updated && nextUpdated && snapshot.last_updated !== nextUpdated)) {
           showToast('New ML analysis results available!', 'success');
-          
-          // Auto-refresh after 3 seconds
           setTimeout(() => {
             window.location.reload();
           }, 3000);
         }
       })
-      .catch(error => console.log('Auto-refresh check failed:', error));
-  }, 120000); // 2 minutes
+      .catch(() => {});
+  }, 120000);
+  {% endif %}
 
   function showToast(message, type = 'info') {
     const toastDiv = document.createElement('div');
@@ -483,6 +680,5 @@
       toastDiv.remove();
     });
   }
-  {% endif %}
 </script>
 {% endblock %}

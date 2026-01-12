@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<div class="min-vh-100 d-flex align-items-center bg-body-tertiary">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-md-6 col-lg-5">
+        <div class="card fade-in">
+          <div class="card-body p-5">
+            <div class="text-center mb-4">
+              <div class="mb-3">
+                <img
+                  src="{{ url_for('static', filename='images/Logo_NoBackground.png') }}"
+                  alt="Cenaris"
+                  class="img-fluid"
+                  style="max-height: 72px;"
+                />
+              </div>
+              <h1 class="h3 mb-2 fw-bold">Verify Email</h1>
+              {% if prefilled and email %}
+              <p class="text-body-secondary">We sent a verification link to <span class="fw-semibold">{{ email }}</span>.</p>
+              {% else %}
+              <p class="text-body-secondary">We’ll send you a verification link.</p>
+              {% endif %}
+            </div>
+
+            <form method="POST" novalidate>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+              {% if prefilled and email %}
+              <input type="hidden" name="email" value="{{ email }}" />
+              {% else %}
+              <div class="mb-4">
+                <label class="form-label" for="email">Email</label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  class="form-control"
+                  value="{{ email or '' }}"
+                  required
+                  autocomplete="email"
+                />
+              </div>
+              {% endif %}
+
+              {% if config.get('TURNSTILE_SITE_KEY') %}
+              <div class="mb-4">
+                <div class="cf-turnstile" data-sitekey="{{ config.get('TURNSTILE_SITE_KEY') }}"></div>
+              </div>
+              {% endif %}
+
+              <div class="d-grid mb-3">
+                {% if prefilled and email %}
+                <button type="submit" class="btn btn-primary">Resend verification link</button>
+                {% else %}
+                <button type="submit" class="btn btn-primary">Send verification link</button>
+                {% endif %}
+              </div>
+            </form>
+
+            <div class="text-center mt-3">
+              <a href="{{ url_for('auth.login') }}" class="text-decoration-none">
+                <i class="bi bi-arrow-left me-1"></i>Back to sign in
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if config.get('TURNSTILE_SITE_KEY') %}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+{% endif %}
+
+<script>
+  // If the user verifies their email in another tab, reload this page
+  // when they return so the app can redirect them forward automatically.
+  (function () {
+    const statusUrl = "{{ url_for('auth.verify_email_status') }}";
+
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(statusUrl, {
+          method: "GET",
+          headers: { "Accept": "application/json" },
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.verified && data.next_url) {
+          window.location.href = data.next_url;
+        }
+      } catch (e) {
+        // no-op
+      }
+    };
+
+    const reload = () => {
+      try {
+        window.location.reload();
+      } catch (e) {
+        // no-op
+      }
+    };
+
+    window.addEventListener('focus', reload);
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') reload();
+    });
+
+    // Also poll in the background so the page can advance without manual refresh.
+    // This stays safe because it only reports status for the currently authenticated user.
+    setInterval(checkStatus, 2000);
+    checkStatus();
+  })();
+</script>
+{% endblock %}

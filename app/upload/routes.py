@@ -4,7 +4,8 @@ from werkzeug.utils import secure_filename
 from app.upload import bp
 from app.services.azure_storage import AzureBlobStorageService
 from app.services.file_validation import FileValidationService
-from app.models import Document
+from app.models import Document, Organization, OrganizationMembership
+from app import db
 from datetime import datetime, timezone
 import logging
 
@@ -15,6 +16,34 @@ logger = logging.getLogger(__name__)
 def upload_file():
     """Handle file upload to Azure Blob Storage."""
     try:
+        org_id = getattr(current_user, 'organization_id', None)
+        if not org_id:
+            flash('Please select an organization before uploading.', 'info')
+            return redirect(url_for('onboarding.organization'))
+
+        if not current_user.has_permission('documents.upload', org_id=int(org_id)):
+            flash('You do not have permission to upload documents.', 'error')
+            return redirect(url_for('main.dashboard'))
+
+        membership = (
+            OrganizationMembership.query
+            .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+            .first()
+        )
+        if not membership:
+            flash('You do not have access to that organization.', 'error')
+            return redirect(url_for('onboarding.organization'))
+
+        organization = db.session.get(Organization, int(org_id))
+        if not organization:
+            flash('Organization not found.', 'error')
+            return redirect(url_for('onboarding.organization'))
+
+        # Billing can be deferred; do not block document uploads.
+        # (Billing gating is applied for reports/exports elsewhere.)
+        if not organization.billing_complete():
+            flash('Billing details are incomplete. You can still upload documents.', 'warning')
+
         # Check if file is present in request
         if 'file' not in request.files:
             flash('No file selected. Please choose a file to upload.', 'error')
@@ -44,8 +73,9 @@ def upload_file():
         
         # Generate unique file path for ADLS
         file_path = storage_service.generate_blob_name(
-            validation_result['original_filename'], 
-            current_user.id
+            validation_result['original_filename'],
+            current_user.id,
+            organization_id=int(org_id),
         )
         
         # Prepare metadata
@@ -74,26 +104,29 @@ def upload_file():
         
         # Save document metadata to database
         try:
-            document = Document.create_document(
-                filename=validation_result['safe_filename'],
-                original_filename=validation_result['original_filename'],
+            # The documents.content_type column may be limited (older schema uses VARCHAR(50)).
+            # DOCX MIME types can exceed that length, so store a safe, truncated value.
+            db_content_type = (validation_result.get('content_type') or '').strip() or None
+            if db_content_type and len(db_content_type) > 50:
+                db_content_type = db_content_type[:50]
+
+            document = Document(
+                filename=validation_result['original_filename'],
                 blob_name=file_path,
                 file_size=validation_result['file_size'],
-                content_type=validation_result['content_type'],
-                uploaded_by=current_user.id
+                content_type=db_content_type,
+                uploaded_by=current_user.id,
+                organization_id=int(org_id)
             )
-            
-            if document:
-                storage_type = upload_result.get('storage_type', 'ADLS_Gen2')
-                flash(f'File "{validation_result["original_filename"]}" uploaded successfully to {storage_type}!', 'success')
-                logger.info(f"File uploaded successfully: {file_path} by user {current_user.id} to {storage_type}")
-            else:
-                # If database save failed, try to clean up the uploaded file
-                storage_service.delete_file(file_path)
-                flash('Upload failed: Unable to save file information.', 'error')
-                logger.error(f"Database save failed for uploaded file: {file_path}")
+            db.session.add(document)
+            db.session.commit()
+
+            storage_type = upload_result.get('storage_type', 'ADLS_Gen2')
+            flash(f'File "{validation_result["original_filename"]}" uploaded successfully to {storage_type}!', 'success')
+            logger.info(f"File uploaded successfully: {file_path} by user {current_user.id} to {storage_type}")
         
         except Exception as e:
+            db.session.rollback()
             # If database save failed, try to clean up the uploaded file
             storage_service.delete_file(file_path)
             flash('Upload failed: Database error occurred.', 'error')
@@ -111,6 +144,10 @@ def upload_file():
 def validate_file_ajax():
     """AJAX endpoint for client-side file validation."""
     try:
+        org_id = getattr(current_user, 'organization_id', None)
+        if not org_id or not current_user.has_permission('documents.upload', org_id=int(org_id)):
+            return jsonify({'success': False, 'error': 'Not authorized', 'error_code': 'NOT_AUTHORIZED'}), 403
+
         if 'file' not in request.files:
             return jsonify({
                 'success': False,

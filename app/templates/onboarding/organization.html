@@ -1,0 +1,470 @@
+{% extends "base.html" %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<div class="min-vh-100 d-flex align-items-center bg-body-tertiary">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-6">
+        <div class="card fade-in">
+          <div class="card-body p-5">
+            <style>
+              /* Minimal select styling (uses Bootstrap theme variables only) */
+              .minimal-select {
+                border-radius: 0.75rem;
+                background-color: var(--bs-body-bg);
+                border-color: var(--bs-border-color);
+              }
+
+              .minimal-select:focus {
+                border-color: rgba(var(--bs-primary-rgb), 0.6);
+                box-shadow: 0 0 0 0.14rem rgba(var(--bs-primary-rgb), 0.10);
+              }
+
+              /* Fancy dropdown-select (replaces native <select> menu UI) */
+              .fancy-select-btn {
+                border-radius: 0.75rem;
+                background-color: var(--bs-body-bg);
+                border: 1px solid var(--bs-border-color);
+                padding: 0.9rem 1rem;
+                font-size: 1.05rem;
+              }
+
+              .fancy-select-btn:focus {
+                border-color: rgba(var(--bs-primary-rgb), 0.6);
+                box-shadow: 0 0 0 0.14rem rgba(var(--bs-primary-rgb), 0.10);
+              }
+
+              .fancy-select-btn .fancy-select-label {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+              }
+
+              .fancy-select-btn.is-invalid {
+                border-color: var(--bs-danger);
+              }
+
+              .fancy-select-menu {
+                border-radius: 0.85rem;
+                border-color: var(--bs-border-color);
+                box-shadow: var(--shadow-sm);
+                padding: 0.35rem;
+              }
+
+              .fancy-select-item {
+                border-radius: 0.6rem;
+                padding: 0.55rem 0.75rem;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+              }
+
+              .fancy-select-item .muted {
+                color: var(--bs-secondary-color);
+              }
+
+              /* Select-all checkbox styling */
+              #declarations-select-all {
+                width: 1.15rem;
+                height: 1.15rem;
+                border-width: 2px;
+              }
+
+              #declarations-select-all:checked {
+                background-color: rgba(var(--bs-primary-rgb), 0.9);
+                border-color: rgba(var(--bs-primary-rgb), 0.9);
+              }
+
+              .select-all-wrapper {
+                background: rgba(var(--bs-primary-rgb), 0.08);
+                border-radius: 0.6rem;
+                padding: 0.65rem 0.85rem;
+                border: 1px solid rgba(var(--bs-primary-rgb), 0.2);
+              }
+
+              .select-all-label {
+                font-weight: 500;
+                color: rgba(var(--bs-primary-rgb), 1);
+              }
+            </style>
+
+            <div class="text-center mb-3">
+              <img
+                src="{{ url_for('static', filename='images/Logo_NoBackground.png') }}"
+                alt="Cenaris"
+                class="img-fluid"
+                style="max-height: 64px;"
+              />
+            </div>
+            <div class="mb-4">
+              <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 fw-bold mb-0">Setup your organization</h1>
+                <span class="badge bg-primary">Step 1 of 4</span>
+              </div>
+              <p class="text-body-secondary mb-0">Tell us about your organization and accept our terms</p>
+            </div>
+
+            <div class="progress mb-4" style="height: 6px;">
+              <div class="progress-bar" style="width: 25%"></div>
+            </div>
+
+            <form method="POST" novalidate>
+              {{ form.hidden_tag() }}
+
+              <div class="mb-3">
+                {{ form.organization_name.label(class="form-label") }}
+                {{ form.organization_name() }}
+                {% if form.organization_name.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in form.organization_name.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="mb-3">
+                {{ form.trading_name.label(class="form-label") }}
+                {{ form.trading_name() }}
+              </div>
+
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  {{ form.abn.label(class="form-label") }}
+                  {{ form.abn() }}
+                  {% if form.abn.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.abn.errors %}
+                        <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6 mb-3">
+                  {{ form.organization_type.label(class="form-label") }}
+                  {% set _org_type_val = (form.organization_type.data or '') %}
+                  <input type="hidden" name="{{ form.organization_type.name }}" id="org-type-value" value="{{ _org_type_val }}" />
+                  <div class="dropdown w-100" data-fancy-select data-target="org-type-value" data-placeholder="Select...">
+                    <button
+                      class="btn fancy-select-btn w-100 d-flex align-items-center justify-content-between {% if form.organization_type.errors %}is-invalid{% endif %}"
+                      type="button"
+                      data-bs-toggle="dropdown"
+                      aria-expanded="false"
+                    >
+                      <span class="fancy-select-label">Select...</span>
+                      <i class="bi bi-chevron-down"></i>
+                    </button>
+                    <ul class="dropdown-menu w-100 fancy-select-menu">
+                      {% for val, label in form.organization_type.choices %}
+                        {% if val == '' %}
+                          <li>
+                            <span class="dropdown-item fancy-select-item disabled">
+                              <span class="muted">{{ label }}</span>
+                              <span></span>
+                            </span>
+                          </li>
+                        {% else %}
+                          <li>
+                            <button
+                              type="button"
+                              class="dropdown-item fancy-select-item"
+                              data-value="{{ val }}"
+                              data-label="{{ label }}"
+                            >
+                              <span>{{ label }}</span>
+                              <i class="bi bi-check2" style="opacity: 0;"></i>
+                            </button>
+                          </li>
+                        {% endif %}
+                      {% endfor %}
+                    </ul>
+                  </div>
+                  {% if form.organization_type.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.organization_type.errors %}
+                        <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  {{ form.industry.label(class="form-label") }}
+                  {% set _industry_val = (form.industry.data or '') %}
+                  <input type="hidden" name="{{ form.industry.name }}" id="industry-value" value="{{ _industry_val }}" />
+                  <div class="dropdown w-100" data-fancy-select data-target="industry-value" data-placeholder="Select...">
+                    <button
+                      class="btn fancy-select-btn w-100 d-flex align-items-center justify-content-between {% if form.industry.errors %}is-invalid{% endif %}"
+                      type="button"
+                      data-bs-toggle="dropdown"
+                      aria-expanded="false"
+                    >
+                      <span class="fancy-select-label">Select...</span>
+                      <i class="bi bi-chevron-down"></i>
+                    </button>
+                    <ul class="dropdown-menu w-100 fancy-select-menu">
+                      {% for val, label in form.industry.choices %}
+                        {% if val == '' %}
+                          <li>
+                            <span class="dropdown-item fancy-select-item disabled">
+                              <span class="muted">{{ label }}</span>
+                              <span></span>
+                            </span>
+                          </li>
+                        {% else %}
+                          <li>
+                            <button
+                              type="button"
+                              class="dropdown-item fancy-select-item"
+                              data-value="{{ val }}"
+                              data-label="{{ label }}"
+                            >
+                              <span>{{ label }}</span>
+                              <i class="bi bi-check2" style="opacity: 0;"></i>
+                            </button>
+                          </li>
+                        {% endif %}
+                      {% endfor %}
+                    </ul>
+                  </div>
+                  {% if form.industry.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.industry.errors %}
+                        <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6 mb-3">
+                  {{ form.contact_email.label(class="form-label") }}
+                  {{ form.contact_email() }}
+                  {% if form.contact_email.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.contact_email.errors %}
+                        <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="mb-4">
+                {{ form.address.label(class="form-label") }}
+                {{ form.address() }}
+                {% if form.address.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in form.address.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="mb-4">
+                <h2 class="h6 fw-bold mb-2">Declarations</h2>
+                <p class="text-body-secondary small mb-3">
+                  These confirmations help with governance and compliance expectations.
+                </p>
+
+                <div class="select-all-wrapper d-flex align-items-center justify-content-between mb-3">
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="declarations-select-all" />
+                    <label class="form-check-label select-all-label" for="declarations-select-all" id="select-all-label">
+                      <span id="select-all-text">Select all</span>
+                    </label>
+                  </div>
+                  <span class="small text-body-secondary">Required</span>
+                </div>
+
+                <div class="form-check mb-2">
+                  {{ form.operates_in_australia() }}
+                  <label class="form-check-label" for="{{ form.operates_in_australia.id }}">{{ form.operates_in_australia.label.text }}</label>
+                </div>
+                {% if form.operates_in_australia.errors %}
+                  <div class="invalid-feedback d-block mb-2">
+                    {% for error in form.operates_in_australia.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <div class="form-check mb-2">
+                  {{ form.platform_disclaimer_ack() }}
+                  <label class="form-check-label" for="{{ form.platform_disclaimer_ack.id }}">{{ form.platform_disclaimer_ack.label.text }}</label>
+                </div>
+                {% if form.platform_disclaimer_ack.errors %}
+                  <div class="invalid-feedback d-block mb-2">
+                    {% for error in form.platform_disclaimer_ack.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <div class="form-check mb-2">
+                  {{ form.responsibility_ack() }}
+                  <label class="form-check-label" for="{{ form.responsibility_ack.id }}">{{ form.responsibility_ack.label.text }}</label>
+                </div>
+                {% if form.responsibility_ack.errors %}
+                  <div class="invalid-feedback d-block mb-2">
+                    {% for error in form.responsibility_ack.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <div class="form-check mb-2">
+                  {{ form.authority_to_upload_ack() }}
+                  <label class="form-check-label" for="{{ form.authority_to_upload_ack.id }}">{{ form.authority_to_upload_ack.label.text }}</label>
+                </div>
+                {% if form.authority_to_upload_ack.errors %}
+                  <div class="invalid-feedback d-block mb-2">
+                    {% for error in form.authority_to_upload_ack.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <div class="form-check mt-3">
+                  {{ form.data_processing_ack() }}
+                  <label class="form-check-label" for="{{ form.data_processing_ack.id }}">{{ form.data_processing_ack.label.text }}</label>
+                </div>
+                {% if form.data_processing_ack.errors %}
+                  <div class="invalid-feedback d-block mb-2">
+                    {% for error in form.data_processing_ack.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <div class="form-check mt-3">
+                  {{ form.accept_terms() }}
+                  <label class="form-check-label" for="{{ form.accept_terms.id }}">
+                    I agree to the
+                    <a href="{{ url_for('main.terms') }}" target="_blank" rel="noopener">Terms and Conditions</a>,
+                    <a href="{{ url_for('main.privacy') }}" target="_blank" rel="noopener">Privacy Policy</a>,
+                    and
+                    <a href="{{ url_for('main.disclaimer') }}" target="_blank" rel="noopener">Disclaimer</a>
+                  </label>
+                </div>
+                {% if form.accept_terms.errors %}
+                  <div class="invalid-feedback d-block mb-2">
+                    {% for error in form.accept_terms.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="d-grid">
+                {{ form.submit() }}
+              </div>
+            </form>
+
+            <div class="text-center mt-3">
+              <a href="{{ url_for('auth.logout') }}" class="small text-decoration-none" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                Sign out
+              </a>
+              <form id="logout-form" method="POST" action="{{ url_for('auth.logout') }}" class="d-none">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    // Fancy dropdown-select wiring
+    const initFancySelect = (root) => {
+      const targetId = root.getAttribute('data-target');
+      const placeholder = root.getAttribute('data-placeholder') || 'Select...';
+      const hidden = document.getElementById(targetId);
+      const button = root.querySelector('.fancy-select-btn');
+      const labelEl = root.querySelector('.fancy-select-label');
+      const items = Array.from(root.querySelectorAll('[data-value]'));
+      if (!hidden || !button || !labelEl) return;
+
+      const setValue = (value, label) => {
+        hidden.value = value;
+        labelEl.textContent = label || placeholder;
+        items.forEach((it) => {
+          const selected = it.getAttribute('data-value') === value;
+          const icon = it.querySelector('i');
+          if (icon) icon.style.opacity = selected ? '1' : '0';
+          it.classList.toggle('active', selected);
+        });
+      };
+
+      // Initial state based on hidden input value
+      const current = (hidden.value || '').trim();
+      if (current) {
+        const match = items.find((it) => it.getAttribute('data-value') === current);
+        setValue(current, match ? (match.getAttribute('data-label') || match.textContent.trim()) : current);
+      } else {
+        setValue('', placeholder);
+      }
+
+      items.forEach((it) => {
+        it.addEventListener('click', () => {
+          const value = it.getAttribute('data-value') || '';
+          const lbl = it.getAttribute('data-label') || it.textContent.trim();
+          setValue(value, lbl);
+        });
+      });
+    };
+
+    document.querySelectorAll('[data-fancy-select]').forEach(initFancySelect);
+
+    const selectAll = document.getElementById('declarations-select-all');
+    if (!selectAll) return;
+
+    const selectAllText = document.getElementById('select-all-text');
+
+    const ids = [
+      '{{ form.operates_in_australia.id }}',
+      '{{ form.platform_disclaimer_ack.id }}',
+      '{{ form.responsibility_ack.id }}',
+      '{{ form.authority_to_upload_ack.id }}',
+      '{{ form.data_processing_ack.id }}',
+      '{{ form.accept_terms.id }}',
+    ];
+
+    const boxes = ids
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
+
+    const syncSelectAll = () => {
+      const allChecked = boxes.length > 0 && boxes.every((b) => b.checked);
+      const anyChecked = boxes.some((b) => b.checked);
+      selectAll.checked = allChecked;
+      selectAll.indeterminate = !allChecked && anyChecked;
+      
+      // Update label text
+      if (selectAllText) {
+        selectAllText.textContent = allChecked ? 'Deselect all' : 'Select all';
+      }
+    };
+
+    selectAll.addEventListener('change', () => {
+      const shouldCheck = selectAll.checked;
+      boxes.forEach((b) => {
+        b.checked = shouldCheck;
+        b.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      syncSelectAll();
+    });
+
+    boxes.forEach((b) => b.addEventListener('change', syncSelectAll));
+    syncSelectAll();
+  })();
+</script>
+{% endblock %}

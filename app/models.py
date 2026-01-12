@@ -1,420 +1,363 @@
-import sqlite3
-import hashlib
 from datetime import datetime, timezone
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import g
 from flask_login import UserMixin
-from flask import current_app
-import os
+from werkzeug.security import generate_password_hash, check_password_hash
+from app import db
 
-class User(UserMixin):
-    """User model for authentication and user management."""
-    
-    def __init__(self, id=None, email=None, password_hash=None, created_at=None, is_active=True):
-        self.id = id
-        self.email = email
-        self.password_hash = password_hash
-        self.created_at = created_at or datetime.now(timezone.utc)
-        self._is_active = is_active
-    
+
+class OrganizationMembership(db.Model):
+    __tablename__ = 'organization_memberships'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
+    role = db.Column(db.String(20), default='User', nullable=False)
+    # Org-scoped RBAC role reference (preferred)
+    role_id = db.Column(db.Integer, db.ForeignKey('rbac_roles.id'), nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    # Invite tracking (org membership invites)
+    invited_at = db.Column(db.DateTime, nullable=True)
+    invited_by_user_id = db.Column(db.Integer, nullable=True)
+    invite_last_sent_at = db.Column(db.DateTime, nullable=True)
+    invite_send_count = db.Column(db.Integer, default=0, nullable=False)
+    invite_accepted_at = db.Column(db.DateTime, nullable=True)
+    invite_revoked_at = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'user_id', name='uq_org_membership_org_user'),
+    )
+
+    # Avoid large JOINs on every membership lookup; load related rows only when needed.
+    department = db.relationship('Department', lazy='selectin')
+    rbac_role = db.relationship('RBACRole', lazy='selectin')
+
     @property
-    def is_active(self):
-        """Get the active status of the user."""
-        return self._is_active
-    
-    @is_active.setter
-    def is_active(self, value):
-        """Set the active status of the user."""
-        self._is_active = bool(value)
-    
+    def display_role_name(self) -> str:
+        if self.rbac_role and (self.rbac_role.name or '').strip():
+            return (self.rbac_role.name or '').strip()
+        return (self.role or 'User').strip() or 'User'
+
+
+class Department(db.Model):
+    __tablename__ = 'departments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    name = db.Column(db.String(80), nullable=False)
+    # Store a Bootstrap contextual color token: primary/secondary/success/info/warning/danger/dark
+    color = db.Column(db.String(20), nullable=False, default='primary')
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    # Relationship to see members in this department
+    memberships = db.relationship('OrganizationMembership', foreign_keys='OrganizationMembership.department_id', lazy='dynamic', overlaps="department")
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'name', name='uq_departments_org_name'),
+        db.Index('ix_departments_org_id', 'organization_id'),
+    )
+
+
+class Organization(db.Model):
+    __tablename__ = 'organizations'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    trading_name = db.Column(db.String(100))
+    abn = db.Column(db.String(20))
+    organization_type = db.Column(db.String(40))
+    contact_email = db.Column(db.String(120))
+    address = db.Column(db.String(255))
+    industry = db.Column(db.String(60))
+    billing_email = db.Column(db.String(120))
+    billing_address = db.Column(db.String(255))
+    logo_blob_name = db.Column(db.String(255))
+    logo_content_type = db.Column(db.String(100))
+    subscription_tier = db.Column(db.String(20), default='Starter')
+
+    # Compliance + privacy acknowledgements
+    operates_in_australia = db.Column(db.Boolean, nullable=True)
+    declarations_accepted_at = db.Column(db.DateTime, nullable=True)
+    declarations_accepted_by_user_id = db.Column(db.Integer, nullable=True)
+    data_processing_ack_at = db.Column(db.DateTime, nullable=True)
+    data_processing_ack_by_user_id = db.Column(db.Integer, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    # Relationships
+    users = db.relationship('User', backref='organization', lazy='dynamic')
+    documents = db.relationship('Document', backref='organization', lazy='dynamic')
+    memberships = db.relationship('OrganizationMembership', backref='organization', lazy='dynamic', cascade='all, delete-orphan')
+    departments = db.relationship('Department', backref='organization', lazy='dynamic', cascade='all, delete-orphan')
+    roles = db.relationship('RBACRole', backref='organization', lazy='dynamic', cascade='all, delete-orphan')
+
+    def core_details_complete(self) -> bool:
+        return bool(
+            (self.name or '').strip()
+            and (self.abn or '').strip()
+            and (self.organization_type or '').strip()
+            and (self.contact_email or '').strip()
+            and (self.address or '').strip()
+            and (self.industry or '').strip()
+        )
+
+    def declarations_complete(self) -> bool:
+        return bool(self.operates_in_australia is True and self.declarations_accepted_at)
+
+    def data_privacy_ack_complete(self) -> bool:
+        return bool(self.data_processing_ack_at)
+
+    def billing_complete(self) -> bool:
+        return bool((self.billing_email or '').strip() and (self.billing_address or '').strip())
+
+    def onboarding_complete(self) -> bool:
+        # "Onboarding complete" means the user can access the workspace.
+        # Billing can be deferred; uploads/reports are gated separately.
+        return bool(self.core_details_complete() and self.declarations_complete() and self.data_privacy_ack_complete())
+
+
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256))
+
+    # Admin/account-holder details
+    first_name = db.Column(db.String(60))
+    last_name = db.Column(db.String(60))
+    title = db.Column(db.String(80))
+    mobile_number = db.Column(db.String(40))
+    time_zone = db.Column(db.String(60))
+
+    full_name = db.Column(db.String(100))
+    email_verified = db.Column(db.Boolean, default=False, nullable=False)
+    welcome_email_sent_at = db.Column(db.DateTime, nullable=True)
+    terms_accepted_at = db.Column(db.DateTime, nullable=True)
+    password_changed_at = db.Column(db.DateTime, nullable=True)
+    avatar_blob_name = db.Column(db.String(255))
+    avatar_content_type = db.Column(db.String(100))
+    role = db.Column(db.String(20), default='User')
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+
+    # Security: login tracking / lockout
+    last_login_at = db.Column(db.DateTime, nullable=True)
+    password_changed_at = db.Column(db.DateTime, nullable=True)
+    last_failed_login_at = db.Column(db.DateTime, nullable=True)
+    failed_login_count = db.Column(db.Integer, default=0, nullable=False)
+    locked_until = db.Column(db.DateTime, nullable=True)
+    session_version = db.Column(db.Integer, default=1, nullable=False)  # For logout-all-devices
+
+    memberships = db.relationship('OrganizationMembership', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+
+    def display_name(self) -> str:
+        name = (self.full_name or '').strip()
+        if name:
+            return name
+        parts = [p.strip() for p in [(self.first_name or ''), (self.last_name or '')] if (p or '').strip()]
+        if parts:
+            return ' '.join(parts)
+        return (self.email or '').strip()
+
+    def is_org_admin(self, org_id: int | None = None) -> bool:
+        return bool(self.has_permission('users.manage', org_id=org_id))
+
+    def active_membership(self, org_id: int | None = None) -> OrganizationMembership | None:
+        org_id = int(org_id) if org_id is not None else (int(self.organization_id) if self.organization_id else None)
+        if not org_id:
+            return None
+
+        # Request-scoped cache to avoid repeated DB queries when templates/routes
+        # call permission checks multiple times on the same request.
+        try:
+            cache = getattr(g, '_active_membership_cache', None)
+            if cache is None:
+                cache = {}
+                setattr(g, '_active_membership_cache', cache)
+            key = (int(self.id), int(org_id))
+            if key in cache:
+                return cache[key]
+        except Exception:
+            cache = None
+            key = None
+
+        membership = self.memberships.filter_by(organization_id=org_id, is_active=True).first()
+        try:
+            if cache is not None and key is not None:
+                cache[key] = membership
+        except Exception:
+            pass
+        return membership
+
+    def active_role_name(self, org_id: int | None = None) -> str | None:
+        membership = self.active_membership(org_id=org_id)
+        return membership.display_role_name if membership else None
+
+    def has_permission(self, code: str, org_id: int | None = None) -> bool:
+        code = (code or '').strip()
+        if not code:
+            return False
+
+        membership = self.active_membership(org_id=org_id)
+        if not membership:
+            return False
+
+        # Preferred: RBAC role with permissions.
+        if membership.rbac_role:
+            try:
+                perm_cache = getattr(g, '_role_permission_codes_cache', None)
+                if perm_cache is None:
+                    perm_cache = {}
+                    setattr(g, '_role_permission_codes_cache', perm_cache)
+                role_id = int(getattr(membership.rbac_role, 'id', 0) or 0)
+                if role_id and role_id in perm_cache:
+                    codes = perm_cache[role_id]
+                else:
+                    codes = membership.rbac_role.effective_permission_codes()
+                    if role_id:
+                        perm_cache[role_id] = codes
+            except Exception:
+                codes = membership.rbac_role.effective_permission_codes()
+
+            return code in codes
+
+        # Legacy fallback (until role_id is fully backfilled everywhere)
+        legacy = (membership.role or '').strip().lower()
+        if legacy in {'admin', 'organisation administrator', 'organization administrator'}:
+            return True
+
+        # Conservative defaults for legacy non-admin members.
+        return code in {'documents.view', 'documents.upload'}
+
     def set_password(self, password):
-        """Hash and set the user's password."""
         self.password_hash = generate_password_hash(password)
-    
+        self.password_changed_at = datetime.now(timezone.utc)
+
     def check_password(self, password):
-        """Check if the provided password matches the user's password."""
+        if not self.password_hash:
+            return False
         return check_password_hash(self.password_hash, password)
-    
-    def get_id(self):
-        """Return the user ID as a string (required by Flask-Login)."""
-        return str(self.id)
-    
-    @staticmethod
-    def get_db_connection():
-        """Get database connection."""
-        db_path = current_app.config.get('DATABASE_URL', 'sqlite:///compliance.db').replace('sqlite:///', '')
-        return sqlite3.connect(db_path)
-    
-    @classmethod
-    def create_user(cls, email, password):
-        """Create a new user in the database."""
-        conn = cls.get_db_connection()
-        cursor = conn.cursor()
-        
-        try:
-            # Check if user already exists
-            cursor.execute('SELECT id FROM users WHERE email = ?', (email,))
-            if cursor.fetchone():
-                return None  # User already exists
-            
-            # Create new user
-            user = cls(email=email)
-            user.set_password(password)
-            
-            cursor.execute('''
-                INSERT INTO users (email, password_hash, created_at, is_active)
-                VALUES (?, ?, ?, ?)
-            ''', (user.email, user.password_hash, user.created_at, user.is_active))
-            
-            user.id = cursor.lastrowid
-            conn.commit()
-            return user
-            
-        except sqlite3.Error as e:
-            conn.rollback()
-            raise e
-        finally:
-            conn.close()
-    
-    @classmethod
-    def get_by_id(cls, user_id):
-        """Get user by ID."""
-        conn = cls.get_db_connection()
-        cursor = conn.cursor()
-        
-        try:
-            cursor.execute('''
-                SELECT id, email, password_hash, created_at, is_active
-                FROM users WHERE id = ?
-            ''', (user_id,))
-            
-            row = cursor.fetchone()
-            if row:
-                return cls(
-                    id=row[0],
-                    email=row[1],
-                    password_hash=row[2],
-                    created_at=row[3],
-                    is_active=bool(row[4])
-                )
-            return None
-            
-        except sqlite3.Error:
-            return None
-        finally:
-            conn.close()
-    
-    @classmethod
-    def get_by_email(cls, email):
-        """Get user by email."""
-        conn = cls.get_db_connection()
-        cursor = conn.cursor()
-        
-        try:
-            cursor.execute('''
-                SELECT id, email, password_hash, created_at, is_active
-                FROM users WHERE email = ?
-            ''', (email,))
-            
-            row = cursor.fetchone()
-            if row:
-                return cls(
-                    id=row[0],
-                    email=row[1],
-                    password_hash=row[2],
-                    created_at=row[3],
-                    is_active=bool(row[4])
-                )
-            return None
-            
-        except sqlite3.Error:
-            return None
-        finally:
-            conn.close()
-    
-    def save(self):
-        """Save user changes to database."""
-        conn = self.get_db_connection()
-        cursor = conn.cursor()
-        
-        try:
-            if self.id:
-                # Update existing user
-                cursor.execute('''
-                    UPDATE users 
-                    SET email = ?, password_hash = ?, is_active = ?
-                    WHERE id = ?
-                ''', (self.email, self.password_hash, self._is_active, self.id))
-            else:
-                # Insert new user
-                cursor.execute('''
-                    INSERT INTO users (email, password_hash, created_at, is_active)
-                    VALUES (?, ?, ?, ?)
-                ''', (self.email, self.password_hash, self.created_at, self._is_active))
-                self.id = cursor.lastrowid
-            
-            conn.commit()
-            return True
-            
-        except sqlite3.Error:
-            conn.rollback()
-            return False
-        finally:
-            conn.close()
-    
-    def __repr__(self):
-        return f'<User {self.email}>'
 
 
-class Document:
-    """Document model for file metadata management."""
-    
-    def __init__(self, id=None, filename=None, original_filename=None, blob_name=None, 
-                 file_size=None, content_type=None, uploaded_by=None, uploaded_at=None, is_active=True):
-        self.id = id
-        self.filename = filename
-        self.original_filename = original_filename
-        self.blob_name = blob_name
-        self.file_size = file_size
-        self.content_type = content_type
-        self.uploaded_by = uploaded_by
-        self.uploaded_at = uploaded_at or datetime.now(timezone.utc)
-        self.is_active = is_active
-    
-    @staticmethod
-    def get_db_connection():
-        """Get database connection."""
-        db_path = current_app.config.get('DATABASE_URL', 'sqlite:///compliance.db').replace('sqlite:///', '')
-        return sqlite3.connect(db_path)
-    
-    @classmethod
-    def create_document(cls, filename, original_filename, blob_name, file_size, content_type, uploaded_by):
-        """Create a new document record in the database."""
-        conn = cls.get_db_connection()
-        cursor = conn.cursor()
-        
-        try:
-            document = cls(
-                filename=filename,
-                original_filename=original_filename,
-                blob_name=blob_name,
-                file_size=file_size,
-                content_type=content_type,
-                uploaded_by=uploaded_by
-            )
-            
-            cursor.execute('''
-                INSERT INTO documents (filename, original_filename, blob_name, file_size, 
-                                     content_type, uploaded_by, uploaded_at, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (document.filename, document.original_filename, document.blob_name,
-                  document.file_size, document.content_type, document.uploaded_by,
-                  document.uploaded_at, document.is_active))
-            
-            document.id = cursor.lastrowid
-            conn.commit()
-            return document
-            
-        except sqlite3.Error as e:
-            conn.rollback()
-            raise e
-        finally:
-            conn.close()
-    
-    @classmethod
-    def get_by_id(cls, document_id):
-        """Get document by ID."""
-        conn = cls.get_db_connection()
-        cursor = conn.cursor()
-        
-        try:
-            cursor.execute('''
-                SELECT id, filename, original_filename, blob_name, file_size,
-                       content_type, uploaded_by, uploaded_at, is_active
-                FROM documents WHERE id = ?
-            ''', (document_id,))
-            
-            row = cursor.fetchone()
-            if row:
-                # Convert uploaded_at string to datetime if needed
-                uploaded_at = row[7]
-                if isinstance(uploaded_at, str):
-                    try:
-                        uploaded_at = datetime.fromisoformat(uploaded_at.replace('Z', '+00:00'))
-                    except:
-                        uploaded_at = datetime.now(timezone.utc)
-                
-                return cls(
-                    id=row[0],
-                    filename=row[1],
-                    original_filename=row[2],
-                    blob_name=row[3],
-                    file_size=row[4],
-                    content_type=row[5],
-                    uploaded_by=row[6],
-                    uploaded_at=uploaded_at,
-                    is_active=bool(row[8])
-                )
-            return None
-            
-        except sqlite3.Error:
-            return None
-        finally:
-            conn.close()
-    
-    @classmethod
-    def get_by_user(cls, user_id, limit=None):
-        """Get all documents uploaded by a specific user."""
-        conn = cls.get_db_connection()
-        cursor = conn.cursor()
-        
-        try:
-            query = '''
-                SELECT id, filename, original_filename, blob_name, file_size,
-                       content_type, uploaded_by, uploaded_at, is_active
-                FROM documents 
-                WHERE uploaded_by = ? AND is_active = 1
-                ORDER BY uploaded_at DESC
-            '''
-            
-            if limit:
-                query += f' LIMIT {limit}'
-            
-            cursor.execute(query, (user_id,))
-            
-            documents = []
-            for row in cursor.fetchall():
-                # Convert uploaded_at string to datetime if needed
-                uploaded_at = row[7]
-                if isinstance(uploaded_at, str):
-                    try:
-                        uploaded_at = datetime.fromisoformat(uploaded_at.replace('Z', '+00:00'))
-                    except:
-                        uploaded_at = datetime.now(timezone.utc)
-                
-                documents.append(cls(
-                    id=row[0],
-                    filename=row[1],
-                    original_filename=row[2],
-                    blob_name=row[3],
-                    file_size=row[4],
-                    content_type=row[5],
-                    uploaded_by=row[6],
-                    uploaded_at=uploaded_at,
-                    is_active=bool(row[8])
-                ))
-            
-            return documents
-            
-        except sqlite3.Error:
-            return []
-        finally:
-            conn.close()
-    
-    @classmethod
-    def get_all_active(cls, limit=None):
-        """Get all active documents."""
-        conn = cls.get_db_connection()
-        cursor = conn.cursor()
-        
-        try:
-            query = '''
-                SELECT d.id, d.filename, d.original_filename, d.blob_name, d.file_size,
-                       d.content_type, d.uploaded_by, d.uploaded_at, d.is_active,
-                       u.email as uploader_email
-                FROM documents d
-                JOIN users u ON d.uploaded_by = u.id
-                WHERE d.is_active = 1
-                ORDER BY d.uploaded_at DESC
-            '''
-            
-            if limit:
-                query += f' LIMIT {limit}'
-            
-            cursor.execute(query)
-            
-            documents = []
-            for row in cursor.fetchall():
-                # Convert uploaded_at string to datetime if needed
-                uploaded_at = row[7]
-                if isinstance(uploaded_at, str):
-                    try:
-                        uploaded_at = datetime.fromisoformat(uploaded_at.replace('Z', '+00:00'))
-                    except:
-                        uploaded_at = datetime.now(timezone.utc)
-                
-                doc = cls(
-                    id=row[0],
-                    filename=row[1],
-                    original_filename=row[2],
-                    blob_name=row[3],
-                    file_size=row[4],
-                    content_type=row[5],
-                    uploaded_by=row[6],
-                    uploaded_at=uploaded_at,
-                    is_active=bool(row[8])
-                )
-                doc.uploader_email = row[9]  # Add uploader email for display
-                documents.append(doc)
-            
-            return documents
-            
-        except sqlite3.Error:
-            return []
-        finally:
-            conn.close()
-    
-    def save(self):
-        """Save document changes to database."""
-        conn = self.get_db_connection()
-        cursor = conn.cursor()
-        
-        try:
-            if self.id:
-                # Update existing document
-                cursor.execute('''
-                    UPDATE documents 
-                    SET filename = ?, original_filename = ?, blob_name = ?,
-                        file_size = ?, content_type = ?, is_active = ?
-                    WHERE id = ?
-                ''', (self.filename, self.original_filename, self.blob_name,
-                      self.file_size, self.content_type, self.is_active, self.id))
-            else:
-                # Insert new document
-                cursor.execute('''
-                    INSERT INTO documents (filename, original_filename, blob_name, file_size,
-                                         content_type, uploaded_by, uploaded_at, is_active)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (self.filename, self.original_filename, self.blob_name,
-                      self.file_size, self.content_type, self.uploaded_by,
-                      self.uploaded_at, self.is_active))
-                self.id = cursor.lastrowid
-            
-            conn.commit()
-            return True
-            
-        except sqlite3.Error:
-            conn.rollback()
-            return False
-        finally:
-            conn.close()
-    
-    def delete(self):
-        """Soft delete document (set is_active to False)."""
-        self.is_active = False
-        return self.save()
-    
-    def get_file_size_formatted(self):
-        """Return formatted file size."""
-        if not self.file_size:
-            return "Unknown"
-        
-        # Convert bytes to human readable format
-        size = self.file_size
-        for unit in ['B', 'KB', 'MB', 'GB']:
-            if size < 1024.0:
-                return f"{size:.1f} {unit}"
-            size /= 1024.0
-        return f"{size:.1f} TB"
-    
-    def __repr__(self):
-        return f'<Document {self.filename}>'
+class Document(db.Model):
+    __tablename__ = 'documents'
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(255), nullable=False)
+    blob_name = db.Column(db.String(255))
+    file_size = db.Column(db.Integer)
+    content_type = db.Column(db.String(50))
+    uploaded_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    is_active = db.Column(db.Boolean, default=True)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+
+    uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy='select')
+
+
+rbac_role_permissions = db.Table(
+    'rbac_role_permissions',
+    db.Column('role_id', db.Integer, db.ForeignKey('rbac_roles.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('permission_id', db.Integer, db.ForeignKey('rbac_permissions.id', ondelete='CASCADE'), primary_key=True),
+)
+
+
+rbac_role_inherits = db.Table(
+    'rbac_role_inherits',
+    db.Column('role_id', db.Integer, db.ForeignKey('rbac_roles.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('inherited_role_id', db.Integer, db.ForeignKey('rbac_roles.id', ondelete='CASCADE'), primary_key=True),
+)
+
+
+class RBACPermission(db.Model):
+    __tablename__ = 'rbac_permissions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(80), unique=True, nullable=False)
+    description = db.Column(db.String(255))
+
+
+class RBACRole(db.Model):
+    __tablename__ = 'rbac_roles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    name = db.Column(db.String(80), nullable=False)
+    description = db.Column(db.String(255))
+    is_system = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    # These collections can be large; selectin avoids row explosion from JOINs.
+    permissions = db.relationship('RBACPermission', secondary=rbac_role_permissions, lazy='selectin')
+    inherits = db.relationship(
+        'RBACRole',
+        secondary=rbac_role_inherits,
+        primaryjoin=(rbac_role_inherits.c.role_id == id),
+        secondaryjoin=(rbac_role_inherits.c.inherited_role_id == id),
+        lazy='selectin',
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'name', name='uq_rbac_roles_org_name'),
+        db.Index('ix_rbac_roles_org_id', 'organization_id'),
+    )
+
+    def effective_permission_codes(self) -> set[str]:
+        """Return direct + inherited permission codes (cycle-safe)."""
+        seen_role_ids: set[int] = set()
+        codes: set[str] = set()
+
+        def walk(role: 'RBACRole') -> None:
+            if not role or not role.id:
+                return
+            rid = int(role.id)
+            if rid in seen_role_ids:
+                return
+            seen_role_ids.add(rid)
+
+            for perm in (role.permissions or []):
+                c = (getattr(perm, 'code', None) or '').strip()
+                if c:
+                    codes.add(c)
+
+            for inherited in (role.inherits or []):
+                walk(inherited)
+
+        walk(self)
+        return codes
+
+
+class LoginEvent(db.Model):
+    __tablename__ = 'login_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    email = db.Column(db.String(120), nullable=True)
+    provider = db.Column(db.String(20), nullable=False, default='password')
+    success = db.Column(db.Boolean, nullable=False, default=False)
+    reason = db.Column(db.String(80), nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    user = db.relationship('User', lazy='joined')
+
+    __table_args__ = (
+        db.Index('ix_login_events_user_id_created_at', 'user_id', 'created_at'),
+        db.Index('ix_login_events_ip_created_at', 'ip_address', 'created_at'),
+    )
+
+
+class SuspiciousIP(db.Model):
+    __tablename__ = 'suspicious_ips'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ip_address = db.Column(db.String(45), nullable=False, unique=True)
+    window_started_at = db.Column(db.DateTime, nullable=True)
+    failure_count = db.Column(db.Integer, default=0, nullable=False)
+    blocked_until = db.Column(db.DateTime, nullable=True)
+    last_seen_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        db.Index('ix_suspicious_ips_blocked_until', 'blocked_until'),
+    )

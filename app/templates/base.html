@@ -1,17 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
+{% set _theme = request.cookies.get('theme', 'light') %}
+{% if _theme not in ['light', 'dark'] %}{% set _theme = 'light' %}{% endif %}
+<html lang="en" data-bs-theme="{{ _theme }}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Professional compliance document management system for secure document storage and management."
+      content="Cenaris is a decision-support compliance platform for managing evidence, policies, and reporting."
     />
-    <meta name="author" content="Compliance Management System" />
+    <meta name="author" content="Cenaris" />
 
     <title>
-      {% if title %}{{ title }} - {% endif %}Compliance Document Management
+      {% if title %}{{ title }} - {% endif %}Cenaris
     </title>
+
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/fivicon.ico') }}" sizes="any" />
+    <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='images/fivicon.ico') }}" />
 
     <!-- Bootstrap 5 CSS -->
     <link
@@ -28,27 +33,62 @@
     <!-- Custom CSS -->
     <style>
       :root {
-        --primary-color: #0066cc;
+        /* Brand color: align Bootstrap variables so utilities like bg-opacity work in dark mode */
+        --bs-primary: #0066cc;
+        --bs-primary-rgb: 0, 102, 204;
+
+        --primary-color: var(--bs-primary);
         --primary-dark: #004499;
-        --secondary-color: #e3f2fd;
-        --success-color: #28a745;
-        --warning-color: #ffc107;
-        --danger-color: #dc3545;
-        --info-color: #17a2b8;
-        --light-color: #f8f9fa;
-        --dark-color: #212529;
-        --muted-color: #6c757d;
-        --border-color: #dee2e6;
+
         --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
         --shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
         --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
       }
 
+      /*
+        Dark-mode compatibility layer.
+        Many templates still use Bootstrap "light" utility classes (bg-white, bg-light, text-dark, text-muted).
+        In BS5.3 dark theme, those can look broken. We remap them to theme variables only when dark.
+      */
+      [data-bs-theme="dark"] .bg-white {
+        background-color: var(--bs-body-bg) !important;
+      }
+
+      [data-bs-theme="dark"] .bg-light {
+        background-color: var(--bs-tertiary-bg) !important;
+      }
+
+      [data-bs-theme="dark"] .text-dark {
+        color: var(--bs-body-color) !important;
+      }
+
+      [data-bs-theme="dark"] .text-muted {
+        color: var(--bs-secondary-color) !important;
+      }
+
+      /*
+        In dark mode, shadows can be subtle and many templates use `border-0`.
+        Add a theme-consistent outline so cards remain visually separated.
+      */
+      [data-bs-theme="dark"] .card.border-0 {
+        border: 1px solid var(--bs-border-color) !important;
+      }
+
+      /* Make cards visually distinct from the page background in dark mode */
+      [data-bs-theme="dark"] .card {
+        background-color: var(--bs-tertiary-bg);
+      }
+
+      /* Consistent card elevation across the site */
+      .card {
+        box-shadow: var(--shadow) !important;
+      }
+
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           "Helvetica Neue", Arial, sans-serif;
-        background-color: var(--light-color);
-        color: var(--dark-color);
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
         line-height: 1.6;
       }
 
@@ -59,24 +99,64 @@
       }
 
       .navbar {
-        background-color: #ffffff !important;
-        border-bottom: 1px solid var(--border-color);
+        background-color: var(--bs-body-bg) !important;
+        border-bottom: 1px solid var(--bs-border-color);
         box-shadow: var(--shadow-sm);
       }
 
       .navbar-nav .nav-link {
-        color: var(--dark-color) !important;
+        color: var(--bs-body-color) !important;
         font-weight: 500;
-        padding: 0.75rem 1rem !important;
-        transition: color 0.15s ease-in-out;
+        transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out,
+          border-color 0.15s ease-in-out;
       }
 
-      .navbar-nav .nav-link:hover {
-        color: var(--primary-color) !important;
+      /* Make top-level navigation feel like real buttons */
+      .navbar-nav .nav-link.nav-btn {
+        padding: 0.5rem 0.9rem !important;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
       }
 
-      .navbar-nav .nav-link.active {
-        color: var(--primary-color) !important;
+      /* Prevent long labels (e.g., org names) from reflowing the navbar */
+      .navbar-user-label {
+        max-width: 240px;
+      }
+
+      @media (min-width: 992px) {
+        .navbar-nav {
+          flex-wrap: nowrap;
+        }
+
+        .navbar-nav .nav-link {
+          white-space: nowrap;
+        }
+      }
+
+      @media (max-width: 991.98px) {
+        /* Make collapsed nav easier to tap and avoid cramped pills */
+        .navbar-nav .nav-link.nav-btn {
+          width: 100%;
+          justify-content: flex-start;
+        }
+
+        .navbar-user-label {
+          max-width: 100%;
+        }
+      }
+
+      .navbar-nav .nav-link.nav-btn:hover {
+        background-color: var(--bs-tertiary-bg);
+        border-color: var(--bs-border-color);
+      }
+
+      .navbar-nav .nav-link.nav-btn.active {
+        background-color: var(--bs-primary-bg-subtle);
+        border-color: var(--bs-primary-border-subtle);
+        color: var(--bs-primary-text-emphasis) !important;
         font-weight: 600;
       }
 
@@ -107,20 +187,20 @@
       }
 
       .card {
-        border: none;
-        box-shadow: var(--shadow);
+        border: 1px solid var(--bs-border-color);
+        box-shadow: var(--shadow-sm);
         border-radius: 0.75rem;
       }
 
       .card-header {
-        background-color: #ffffff;
-        border-bottom: 1px solid var(--border-color);
+        background-color: var(--bs-card-bg);
+        border-bottom: 1px solid var(--bs-border-color);
         font-weight: 600;
-        color: var(--dark-color);
+        color: var(--bs-body-color);
       }
 
       .form-control {
-        border: 1px solid var(--border-color);
+        border: 1px solid var(--bs-border-color);
         border-radius: 0.5rem;
         padding: 0.75rem 1rem;
         font-size: 1rem;
@@ -134,53 +214,20 @@
 
       .form-label {
         font-weight: 500;
-        color: var(--dark-color);
+        color: var(--bs-body-color);
         margin-bottom: 0.5rem;
       }
 
       .alert {
-        border: none;
         border-radius: 0.5rem;
         font-weight: 500;
       }
 
-      .alert-success {
-        background-color: #d4edda;
-        color: #155724;
-      }
-
-      .alert-danger {
-        background-color: #f8d7da;
-        color: #721c24;
-      }
-
-      .alert-info {
-        background-color: #cce7ff;
-        color: #004085;
-      }
-
-      .alert-warning {
-        background-color: #fff3cd;
-        color: #856404;
-      }
-
       .footer {
-        background-color: #ffffff;
-        border-top: 1px solid var(--border-color);
-        color: var(--muted-color);
+        background-color: var(--bs-body-bg);
+        border-top: 1px solid var(--bs-border-color);
+        color: var(--bs-secondary-color);
         font-size: 0.875rem;
-      }
-
-      .text-primary {
-        color: var(--primary-color) !important;
-      }
-
-      .bg-primary {
-        background-color: var(--primary-color) !important;
-      }
-
-      .border-primary {
-        border-color: var(--primary-color) !important;
       }
 
       /* Custom animations */
@@ -203,6 +250,69 @@
       .btn.loading {
         position: relative;
         color: transparent !important;
+      }
+
+      /* Floating add user button */
+      .floating-add-user {
+        position: fixed;
+        bottom: 24px;
+        left: 24px;
+        z-index: 1000;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background-color: var(--bs-primary);
+        color: white;
+        border: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 24px;
+        animation: floatIn 0.5s ease-out;
+      }
+
+      @keyframes floatIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px) scale(0.8);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .floating-add-user:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        background-color: var(--primary-dark);
+      }
+
+      .floating-add-user:active {
+        transform: scale(0.95);
+      }
+
+      [data-bs-theme="dark"] .floating-add-user {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      }
+
+      /* Smooth modal appearance */
+      .modal.show .modal-dialog {
+        animation: modalSlideIn 0.3s ease-out;
+      }
+
+      @keyframes modalSlideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-50px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
       .btn.loading::after {
@@ -240,17 +350,97 @@
           margin: 1rem 0;
         }
       }
+
+      /* Cookie Consent Banner */
+      .cookie-consent {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: var(--bs-body-bg);
+        border-top: 2px solid var(--bs-primary);
+        box-shadow: 0 -0.5rem 1.5rem rgba(0, 0, 0, 0.15);
+        z-index: 1050;
+        padding: 1.25rem 0;
+        animation: slideUp 0.4s ease-out;
+      }
+
+      @keyframes slideUp {
+        from {
+          transform: translateY(100%);
+        }
+        to {
+          transform: translateY(0);
+        }
+      }
+
+      .cookie-consent h6 {
+        color: var(--bs-body-color);
+        font-size: 0.95rem;
+      }
+
+      .cookie-consent p {
+        color: var(--bs-secondary-color);
+        line-height: 1.5;
+      }
+
+      .cookie-consent a {
+        color: var(--bs-primary);
+      }
+
+      .cookie-consent a:hover {
+        color: var(--primary-dark);
+      }
+
+      [data-bs-theme="dark"] .cookie-consent {
+        background-color: var(--bs-tertiary-bg);
+        border-top-color: var(--bs-primary);
+      }
     </style>
 
     {% block extra_css %}{% endblock %}
   </head>
   <body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light">
+    <!-- Cookie Consent Banner -->
+    <div id="cookieConsent" class="cookie-consent" style="display: none;">
       <div class="container">
-        <a class="navbar-brand" href="{{ url_for('main.index') }}">
-          <i class="bi bi-shield-check me-2"></i>
-          Cenaris Compliance Management
+        <div class="row align-items-center">
+          <div class="col-lg-8 col-md-7 mb-3 mb-md-0">
+            <div class="d-flex align-items-start">
+              <i class="bi bi-cookie fs-4 me-3 text-primary"></i>
+              <div>
+                <h6 class="mb-1 fw-semibold">We use cookies</h6>
+                <p class="mb-0 small">
+                  We use essential cookies to make our site work. With your consent, we may also use non-essential cookies to improve user experience and analyze website traffic. By clicking "Accept All", you agree to our website's cookie use as described in our <a href="{{ url_for('main.privacy') }}" class="link-primary">Privacy Policy</a>.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-4 col-md-5">
+            <div class="d-flex gap-2 justify-content-md-end">
+              <button class="btn btn-sm btn-outline-secondary" id="cookieDecline">
+                <i class="bi bi-x-lg me-1"></i>Decline
+              </button>
+              <button class="btn btn-sm btn-primary" id="cookieAccept">
+                <i class="bi bi-check-lg me-1"></i>Accept All
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg" data-bs-theme="{{ _theme }}">
+      <div class="container">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('main.index') }}" title="Cenaris">
+          {% set _brand_logo = 'images/logo_white.png' if _theme == 'dark' else 'images/Logo_NoBackground.png' %}
+          <img
+            src="{{ url_for('static', filename=_brand_logo) }}"
+            alt="Cenaris"
+            style="height: 40px; width: auto;"
+          />
+          <span class="visually-hidden">Cenaris</span>
         </a>
 
         <button
@@ -263,11 +453,11 @@
         </button>
 
         <div class="collapse navbar-collapse" id="navbarNav">
-          <ul class="navbar-nav me-auto">
+          <ul class="navbar-nav me-auto gap-1">
             {% if current_user.is_authenticated %}
             <li class="nav-item">
               <a
-                class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}"
+                class="nav-link nav-btn {% if request.endpoint == 'main.dashboard' %}active{% endif %}"
                 href="{{ url_for('main.dashboard') }}"
               >
                 <i class="bi bi-speedometer2 me-1"></i>Dashboard
@@ -275,7 +465,7 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link {% if request.endpoint == 'main.evidence_repository' %}active{% endif %}"
+                class="nav-link nav-btn {% if request.endpoint == 'main.evidence_repository' %}active{% endif %}"
                 href="{{ url_for('main.evidence_repository') }}"
               >
                 <i class="bi bi-folder2-open me-1"></i>Evidence Repository
@@ -283,7 +473,7 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link {% if request.endpoint == 'main.ai_evidence' %}active{% endif %}"
+                class="nav-link nav-btn {% if request.endpoint == 'main.ai_evidence' %}active{% endif %}"
                 href="{{ url_for('main.ai_evidence') }}"
               >
                 <i class="bi bi-robot me-1"></i>AI Evidence
@@ -291,32 +481,26 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link {% if request.endpoint == 'main.gap_analysis' %}active{% endif %}"
+                class="nav-link nav-btn {% if request.endpoint == 'main.gap_analysis' %}active{% endif %}"
                 href="{{ url_for('main.gap_analysis') }}"
               >
                 <i class="bi bi-graph-up me-1"></i>Gap Analysis
               </a>
             </li>
+            {% if can_export_audit %}
             <li class="nav-item">
               <a
-                class="nav-link {% if request.endpoint == 'main.audit_export' %}active{% endif %}"
+                class="nav-link nav-btn {% if request.endpoint == 'main.audit_export' %}active{% endif %}"
                 href="{{ url_for('main.audit_export') }}"
               >
                 <i class="bi bi-download me-1"></i>Audit Export
               </a>
             </li>
-            <li class="nav-item">
-              <a
-                class="nav-link {% if request.endpoint == 'main.user_roles' %}active{% endif %}"
-                href="{{ url_for('main.user_roles') }}"
-              >
-                <i class="bi bi-people me-1"></i>User Roles
-              </a>
-            </li>
+            {% endif %}
             {% endif %}
           </ul>
 
-          <ul class="navbar-nav">
+          <ul class="navbar-nav gap-1">
             {% if current_user.is_authenticated %}
             <li class="nav-item dropdown">
               <a
@@ -326,9 +510,81 @@
                 role="button"
                 data-bs-toggle="dropdown"
               >
-                <i class="bi bi-person-circle me-1"></i>{{ current_user.email }}
+                {% set _org_name = ((current_user.organization.name if current_user.organization else '') or '') %}
+                {% set _has_org_logo = current_user.organization and current_user.organization.logo_blob_name %}
+                {% if _has_org_logo %}
+                <img
+                  src="{{ url_for('main.organization_logo', v=(current_user.organization.logo_blob_name or '') ) }}"
+                  alt="{{ _org_name }} logo"
+                  class="rounded me-2"
+                  style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;"
+                />
+                {% else %}
+                <i class="bi bi-building text-body-secondary me-2" style="font-size: 20px;"></i>
+                {% endif %}
+                <span class="navbar-user-label text-truncate d-inline-block align-middle">
+                  {{ _org_name.strip() if _org_name.strip() else current_user.email }}
+                </span>
+                {% if active_role_name %}
+                <span class="badge bg-primary ms-2">{{ active_role_name }}</span>
+                {% endif %}
               </a>
               <ul class="dropdown-menu">
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('main.profile') }}">
+                    <i class="bi bi-person me-2"></i>My Profile
+                  </a>
+                </li>
+
+                {% if user_organizations and (user_organizations|length) > 1 %}
+                <li><hr class="dropdown-divider" /></li>
+                <li class="px-3 py-1 text-body-secondary small">Switch organization</li>
+                {% for org_info in user_organizations_with_logos %}
+                <li>
+                  <form method="POST" action="{{ url_for('main.switch_organization') }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <input type="hidden" name="organization_id" value="{{ org_info.id }}" />
+                    <button type="submit" class="dropdown-item d-flex align-items-center gap-2">
+                      {% if org_info.has_logo %}
+                      <img
+                        src="{{ url_for('main.organization_logo_by_id', org_id=org_info.id, v=(org_info.logo_blob_name or '') ) }}"
+                        alt="{{ org_info.name }} logo"
+                        class="rounded"
+                        style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;"
+                      />
+                      {% else %}
+                      <i class="bi bi-building text-body-secondary" style="width: 24px; text-align: center;"></i>
+                      {% endif %}
+                      <span class="text-truncate flex-grow-1" style="max-width: 200px;">{{ org_info.name }}</span>
+                      {% if current_user.organization_id == org_info.id %}
+                      <i class="bi bi-check2 ms-auto"></i>
+                      {% endif %}
+                    </button>
+                  </form>
+                </li>
+                {% endfor %}
+                {% endif %}
+
+                {% if can_manage_team or can_manage_org %}
+                <li><hr class="dropdown-divider" /></li>
+                {% endif %}
+
+                {% if can_manage_team %}
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('main.org_admin_dashboard') }}">
+                    <i class="bi bi-people me-2"></i>Team Management
+                  </a>
+                </li>
+                {% endif %}
+
+                {% if can_manage_org %}
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('main.organization_settings') }}">
+                    <i class="bi bi-building me-2"></i>Organization Profile
+                  </a>
+                </li>
+                {% endif %}
+                <li><hr class="dropdown-divider" /></li>
                 <li>
                   <form
                     method="POST"
@@ -349,16 +605,40 @@
             </li>
             {% else %}
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('auth.login') }}">
+              <a class="nav-link nav-btn" href="{{ url_for('auth.login') }}">
                 <i class="bi bi-box-arrow-in-right me-1"></i>Sign In
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('auth.signup') }}">
+              <a class="nav-link nav-btn" href="{{ url_for('auth.signup') }}">
                 <i class="bi bi-person-plus me-1"></i>Sign Up
               </a>
             </li>
             {% endif %}
+
+            <li class="nav-item d-flex align-items-center">
+              <form method="POST" action="{{ url_for('main.set_theme') }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input
+                  type="hidden"
+                  name="theme"
+                  value="{% if _theme == 'dark' %}light{% else %}dark{% endif %}"
+                />
+                <input type="hidden" name="next" value="{{ request.full_path }}" />
+                <button
+                  type="submit"
+                  class="btn btn-sm btn-outline-secondary"
+                  title="Toggle theme"
+                  aria-label="Toggle theme"
+                >
+                  {% if _theme == 'dark' %}
+                  <i class="bi bi-sun-fill"></i>
+                  {% else %}
+                  <i class="bi bi-moon-stars-fill"></i>
+                  {% endif %}
+                </button>
+              </form>
+            </li>
           </ul>
         </div>
       </div>
@@ -398,21 +678,59 @@
     </main>
 
     <!-- Footer -->
-    <footer class="footer mt-auto py-4">
+    <footer class="footer mt-5 py-4" style="border-top: 2px solid var(--bs-border-color); background-color: var(--bs-tertiary-bg);">
       <div class="container">
         <div class="row">
           <div class="col-md-6">
             <p class="mb-0">
-              &copy; 2025 Compliance Document Management System. All rights
-              reserved.
+              &copy; {{ current_year }} Cenaris. All rights reserved.
+            </p>
+            <p class="mb-0 small text-body-secondary">
+              Cenaris is a decision-support platform only. Cenaris does not provide auditing, certification, legal, or compliance advice, and does not guarantee compliance, registration, or audit outcomes. Users remain responsible for governance, regulatory compliance, and independent professional advice.
             </p>
           </div>
           <div class="col-md-6 text-md-end">
-            <p class="mb-0">Secure • Professional • Compliant</p>
+            <p class="mb-1">Secure • Professional • Compliant</p>
+            <p class="mb-0 small">
+              <a href="{{ url_for('main.terms') }}" class="link-secondary">Terms</a>
+              <span class="text-body-secondary">&middot;</span>
+              <a href="{{ url_for('main.privacy') }}" class="link-secondary">Privacy</a>
+              <span class="text-body-secondary">&middot;</span>
+              <a href="{{ url_for('main.disclaimer') }}" class="link-secondary">Disclaimer</a>
+            </p>
           </div>
         </div>
       </div>
     </footer>
+
+    {% if current_user.is_authenticated %}
+      {% set _has_name = ((current_user.full_name or '')|trim) or ((current_user.first_name or '')|trim) or ((current_user.last_name or '')|trim) %}
+      {% if not _has_name %}
+      <div
+        class="modal fade"
+        id="profileNameRequiredModal"
+        tabindex="-1"
+        aria-labelledby="profileNameRequiredModalLabel"
+        aria-hidden="true"
+      >
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="profileNameRequiredModalLabel">Complete your profile</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              Please add your name so your organization can identify you.
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Later</button>
+              <a class="btn btn-primary" href="{{ url_for('main.profile') }}">Add my name</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    {% endif %}
 
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -452,8 +770,173 @@
           });
         });
       });
+
+      // On validation errors, bring the first error into view.
+      document.addEventListener("DOMContentLoaded", function () {
+        // Prefer any visible field-level invalid feedback blocks.
+        const feedback = document.querySelector(
+          ".invalid-feedback.d-block, .text-danger:has(i.bi-exclamation-circle)"
+        );
+
+        if (!feedback) return;
+
+        const field = feedback
+          .closest(".mb-3, .mb-4, .mb-5, .form-group")
+          ?.querySelector("input, select, textarea");
+
+        const target = field || feedback;
+        try {
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+        } catch (e) {
+          target.scrollIntoView(true);
+        }
+
+        if (field) {
+          try {
+            field.focus({ preventScroll: true });
+          } catch (e) {
+            field.focus();
+          }
+        }
+      });
+
+      // Cookie Consent Banner Logic
+      document.addEventListener("DOMContentLoaded", function () {
+        const cookieConsent = document.getElementById("cookieConsent");
+        const cookieAccept = document.getElementById("cookieAccept");
+        const cookieDecline = document.getElementById("cookieDecline");
+
+        // Check if user has already made a choice
+        const cookieChoice = localStorage.getItem("cookieConsent");
+
+        if (!cookieChoice) {
+          // Show banner if no choice made yet
+          cookieConsent.style.display = "block";
+        }
+
+        // Accept cookies
+        cookieAccept.addEventListener("click", function () {
+          localStorage.setItem("cookieConsent", "accepted");
+          cookieConsent.style.display = "none";
+          // Optional: Enable analytics or other non-essential cookies here
+          console.log("Cookies accepted");
+        });
+
+        // Decline cookies
+        cookieDecline.addEventListener("click", function () {
+          localStorage.setItem("cookieConsent", "declined");
+          cookieConsent.style.display = "none";
+          // Optional: Disable non-essential cookies here
+          console.log("Cookies declined");
+        });
+      });
+
+      // Prompt for missing profile name (once per browser session)
+      document.addEventListener("DOMContentLoaded", function () {
+        const modalEl = document.getElementById("profileNameRequiredModal");
+        if (!modalEl || typeof bootstrap === 'undefined') return;
+
+        try {
+          const key = "cenaris_name_prompt_shown";
+          if (window.sessionStorage.getItem(key) === '1') return;
+          window.sessionStorage.setItem(key, '1');
+        } catch (e) {
+          // If sessionStorage is unavailable, just show it.
+        }
+
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+      });
     </script>
 
     {% block extra_js %}{% endblock %}
+
+    <!-- Floating Add User Button (only for org admins, exclude auth/onboarding pages) -->
+    {% if current_user.is_authenticated and can_invite_member and request.endpoint and not request.endpoint.startswith('auth.') and not request.endpoint.startswith('onboarding.') %}
+    <button 
+      class="floating-add-user" 
+      data-bs-toggle="modal" 
+      data-bs-target="#inviteUserModal"
+      title="Invite team member"
+      aria-label="Invite team member"
+    >
+      <i class="bi bi-person-plus-fill"></i>
+    </button>
+
+    <!-- Invite User Modal -->
+    <div class="modal fade" id="inviteUserModal" tabindex="-1" aria-labelledby="inviteUserModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="inviteUserModalLabel">
+              <i class="bi bi-person-plus me-2"></i>Invite Team Member
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <form method="POST" action="{{ url_for('main.org_admin_invite_member') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <div class="modal-body">
+              <div class="mb-3">
+                <label for="inviteEmail" class="form-label">Email Address</label>
+                <input 
+                  type="email" 
+                  class="form-control" 
+                  id="inviteEmail" 
+                  name="email" 
+                  placeholder="colleague@example.com"
+                  required
+                />
+                <div class="form-text">
+                  An invitation email will be sent to this address.
+                </div>
+              </div>
+              
+              <div class="mb-3">
+                <label for="inviteRole" class="form-label">Role</label>
+                <select class="form-select" id="inviteRole" name="role" required>
+                  {% for r in available_roles %}
+                    <option value="{{ r.id }}">{{ r.name }}</option>
+                  {% endfor %}
+                </select>
+                <div class="form-text">
+                  Choose the user's access level for this organization.
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label for="inviteDepartment" class="form-label">Department</label>
+                <div class="input-group">
+                  <select class="form-select" id="inviteDepartment" name="department_id" required>
+                    <option value="">Select department</option>
+                    {% if user_departments %}
+                      {% for dept in user_departments %}
+                        <option value="{{ dept.id }}">{{ dept.name }}</option>
+                      {% endfor %}
+                    {% endif %}
+                  </select>
+                  <a 
+                    href="{{ url_for('main.org_admin_dashboard') }}" 
+                    class="btn btn-outline-secondary" 
+                    title="Manage departments"
+                  >
+                    <i class="bi bi-gear"></i>
+                  </a>
+                </div>
+                <div class="form-text">
+                  Need to create a department? Click the gear icon to go to Team Management.
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-send me-2"></i>Send Invitation
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endif %}
   </body>
 </html>

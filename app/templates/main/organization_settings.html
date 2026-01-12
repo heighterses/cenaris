@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h1 class="h2 fw-bold mb-1"><i class="bi bi-building me-2"></i>Organization Profile</h1>
+          <p class="text-body-secondary mb-0">Manage your organization details, logo, and billing information</p>
+        </div>
+        <div class="d-none d-md-block">
+          <a href="{{ url_for('main.org_admin_dashboard') }}" class="btn btn-outline-primary">
+            <i class="bi bi-people me-2"></i>Team Management
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-body-tertiary border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-gear me-2 text-primary"></i>Organization Profile
+          </h5>
+        </div>
+        <div class="card-body p-4">
+          <form method="POST" enctype="multipart/form-data" novalidate>
+            {{ profile_form.hidden_tag() }}
+
+            <div class="mb-3">
+              {{ profile_form.name.label(class="form-label") }}
+              {{ profile_form.name() }}
+              {% if profile_form.name.errors %}
+                <div class="invalid-feedback d-block">
+                  {% for error in profile_form.name.errors %}
+                    <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                {{ profile_form.abn.label(class="form-label") }}
+                {{ profile_form.abn() }}
+              </div>
+              <div class="col-md-6 mb-3">
+                {{ profile_form.contact_email.label(class="form-label") }}
+                {{ profile_form.contact_email() }}
+              </div>
+            </div>
+
+            <div class="mb-3">
+              {{ profile_form.address.label(class="form-label") }}
+              {{ profile_form.address() }}
+            </div>
+
+            <div class="mb-4">
+              {{ profile_form.logo.label(class="form-label") }}
+              {{ profile_form.logo() }}
+              <small class="text-body-secondary d-block mt-2">
+                Supported: PNG, JPG, WEBP.
+              </small>
+            </div>
+
+            <div class="d-grid d-md-flex gap-2">
+              {{ profile_form.submit() }}
+              <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-lg">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-body-tertiary border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-receipt me-2 text-primary"></i>Billing
+          </h5>
+        </div>
+        <div class="card-body p-4">
+          <form method="POST" novalidate>
+            {{ billing_form.hidden_tag() }}
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                {{ billing_form.billing_email.label(class="form-label") }}
+                {{ billing_form.billing_email() }}
+                {% if billing_form.billing_email.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in billing_form.billing_email.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-md-6 mb-3">
+                {{ billing_form.billing_address.label(class="form-label") }}
+                {{ billing_form.billing_address() }}
+                {% if billing_form.billing_address.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in billing_form.billing_address.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="d-grid d-md-flex gap-2">
+              {{ billing_form.submit() }}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4 mt-4 mt-lg-0">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-body-tertiary border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-image me-2 text-primary"></i>Current Logo
+          </h5>
+        </div>
+        <div class="card-body text-center p-4">
+          {% if organization.logo_blob_name %}
+            <img
+              src="{{ url_for('main.organization_logo') }}"
+              alt="Organization logo"
+              class="img-fluid rounded border bg-body-tertiary p-2"
+              style="max-height: 140px; object-fit: contain;"
+            />
+          {% else %}
+            <div class="py-4">
+              <i class="bi bi-building text-body-secondary" style="font-size: 3rem; opacity: 0.5"></i>
+              <p class="text-body-secondary mt-3 mb-0">No logo uploaded</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

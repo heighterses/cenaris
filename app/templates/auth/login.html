@@ -3,7 +3,7 @@
 {% block main_class %}{% endblock %}
 
 {% block content %}
-<div class="min-vh-100 d-flex align-items-center" style="background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);">
+<div class="min-vh-100 d-flex align-items-center bg-body-tertiary">
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-md-6 col-lg-5">
@@ -12,15 +12,48 @@
                         <!-- Header -->
                         <div class="text-center mb-4">
                             <div class="mb-3">
-                                <i class="bi bi-shield-check text-primary" style="font-size: 3rem;"></i>
+                                                                <img
+                                                                    src="{{ url_for('static', filename='images/Logo_NoBackground.png') }}"
+                                                                    alt="Cenaris"
+                                                                    class="img-fluid"
+                                                                    style="max-height: 72px;"
+                                                                />
                             </div>
-                            <h1 class="h3 mb-2 fw-bold text-dark">Welcome Back</h1>
-                            <p class="text-muted">Sign in to your compliance management account</p>
+                            <h1 class="h3 mb-2 fw-bold">Welcome Back</h1>
+                            <p class="text-body-secondary">Sign in to your compliance management account</p>
+                            
+                            {% if current_user.is_authenticated %}
+                            <div class="alert alert-info mt-3 d-flex align-items-center" role="alert">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <div class="text-start flex-grow-1">
+                                    <small>You are already signed in as <strong>{{ current_user.email }}</strong>. 
+                                    <a href="{{ url_for('auth.login', force_logout=1) }}" class="alert-link">Click here</a> to sign in with a different account.</small>
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                         
                         <!-- Login Form -->
                         <form method="POST" novalidate>
                             {{ form.hidden_tag() }}
+
+                            <!-- SSO Buttons -->
+                            <div class="d-grid gap-2 mb-4">
+                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='google', force_logout=request.args.get('force_logout')) if request.args.get('force_logout') else url_for('auth.oauth_login', provider='google') }}">
+                                    <i class="bi bi-google me-2"></i>Continue with Google
+                                </a>
+                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='microsoft', force_logout=request.args.get('force_logout')) if request.args.get('force_logout') else url_for('auth.oauth_login', provider='microsoft') }}">
+                                    <i class="bi bi-microsoft me-2"></i>Continue with Microsoft
+                                </a>
+                            </div>
+
+                            <div class="text-center mb-4">
+                                <div class="d-flex align-items-center gap-3">
+                                    <hr class="flex-grow-1" />
+                                    <span class="text-body-secondary small">or</span>
+                                    <hr class="flex-grow-1" />
+                                </div>
+                            </div>
                             
                             <!-- Email Field -->
                             <div class="mb-3">
@@ -64,6 +97,9 @@
                                     {{ form.remember_me() }}
                                     {{ form.remember_me.label(class="form-check-label") }}
                                 </div>
+                                <div class="mt-2 text-end">
+                                    <a class="small text-decoration-none" id="forgot-password-link" href="{{ url_for('auth.forgot_password') }}">Forgot password?</a>
+                                </div>
                             </div>
                             
                             <!-- Submit Button -->
@@ -75,7 +111,7 @@
                         <!-- Divider -->
                         <div class="text-center mb-3">
                             <hr class="my-4">
-                            <span class="text-muted small">Don't have an account?</span>
+                            <span class="text-body-secondary small">Don't have an account?</span>
                         </div>
                         
                         <!-- Sign Up Link -->
@@ -89,7 +125,7 @@
                 
                 <!-- Security Notice -->
                 <div class="text-center mt-4">
-                    <small class="text-muted">
+                    <small class="text-body-secondary">
                         <i class="bi bi-lock me-1"></i>
                         Your data is protected with enterprise-grade security
                     </small>
@@ -120,6 +156,19 @@
         const firstInput = document.querySelector('input[type="email"]');
         if (firstInput) {
             firstInput.focus();
+        }
+
+        const forgotLink = document.getElementById('forgot-password-link');
+        const emailInput = document.querySelector('input[type="email"]');
+        if (forgotLink && emailInput) {
+            const baseHref = forgotLink.getAttribute('href');
+            const updateHref = () => {
+                const email = (emailInput.value || '').trim();
+                forgotLink.setAttribute('href', email ? `${baseHref}?email=${encodeURIComponent(email)}` : baseHref);
+            };
+            updateHref();
+            emailInput.addEventListener('input', updateHref);
+            emailInput.addEventListener('change', updateHref);
         }
     });
 </script>
