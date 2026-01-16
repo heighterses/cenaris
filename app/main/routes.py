@@ -138,7 +138,7 @@ def _active_org_id() -> int | None:
 def _require_active_org():
     org_id = _active_org_id()
     if not org_id:
-        flash('Please select an organization to continue.', 'info')
+        flash('Please select an organisation to continue.', 'info')
         return redirect(url_for('onboarding.organization'))
 
     membership = (
@@ -147,7 +147,7 @@ def _require_active_org():
         .first()
     )
     if not membership:
-        flash('You do not have access to that organization.', 'error')
+        flash('You do not have access to that organisation.', 'error')
         return redirect(url_for('onboarding.organization'))
     return None
 
@@ -297,7 +297,7 @@ def switch_organization():
     """Switch the active organization for the current user."""
     org_id_raw = (request.form.get('organization_id') or '').strip()
     if not org_id_raw.isdigit():
-        flash('Invalid organization.', 'error')
+        flash('Invalid organisation.', 'error')
         return redirect(url_for('main.dashboard'))
 
     org_id = int(org_id_raw)
@@ -314,7 +314,7 @@ def switch_organization():
     user = db.session.get(User, int(current_user.id))
     user.organization_id = org_id
     db.session.commit()
-    flash('Organization switched.', 'success')
+    flash('Organisation switched.', 'success')
     return redirect(request.referrer or url_for('main.dashboard'))
 
 
@@ -393,6 +393,7 @@ def org_admin_dashboard():
     pending_invite_revoke_form = PendingInviteRevokeForm()
 
     # Populate role choices for role-update form.
+    available_roles = []
     try:
         from app.models import RBACRole
 
@@ -402,6 +403,7 @@ def org_admin_dashboard():
             .order_by(RBACRole.name.asc())
             .all()
         )
+        available_roles = roles
         update_role_form.role_id.choices = [(str(r.id), r.name) for r in roles]
     except Exception:
         update_role_form.role_id.choices = []
@@ -422,6 +424,7 @@ def org_admin_dashboard():
         pending_invite_resend_form=pending_invite_resend_form,
         pending_invite_revoke_form=pending_invite_revoke_form,
         departments=departments,
+        available_roles=available_roles,
     )
 
 
@@ -437,6 +440,10 @@ def org_admin_update_member_role():
     from app.models import RBACRole
 
     org_id = _active_org_id()
+    organization = db.session.get(Organization, int(org_id))
+    if not organization:
+        flash('Organisation not found.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
 
     form = UpdateMemberRoleForm()
 
@@ -496,6 +503,79 @@ def org_admin_update_member_role():
         # Keep legacy string role in sync during transition.
         membership.role = 'Admin' if new_admin else 'User'
         db.session.commit()
+
+        # Invalidate cached navigation context (role badge/permissions) so the
+        # change is reflected immediately for the affected user.
+        try:
+            from app import invalidate_org_switcher_context_cache
+            invalidate_org_switcher_context_cache(membership.user_id, membership.organization_id)
+            invalidate_org_switcher_context_cache(current_user.id, membership.organization_id)
+        except Exception:
+            pass
+        
+        # Force SQLAlchemy to reload the rbac_role relationship from database
+        # This ensures display_role_name shows the correct new role
+        db.session.expire(membership, ['rbac_role'])
+        db.session.refresh(membership)
+        
+        # Send email notification to user about role change
+        try:
+            from app.auth.routes import _mail_configured
+            from flask import request
+            import datetime
+            
+            if _mail_configured():
+                from sendgrid import SendGridAPIClient
+                from sendgrid.helpers.mail import Mail
+                
+                user = membership.user
+                role_name = target_role.name
+                admin_name = current_user.display_name()
+                org_name = organization.name
+                dashboard_url = request.url_root.rstrip('/') + url_for('main.dashboard')
+                
+                # Log start time
+                start_time = datetime.datetime.now()
+                current_app.logger.info(f"[ROLE CHANGE] Starting email send to {user.email} at {start_time.strftime('%H:%M:%S.%f')}")
+                current_app.logger.info(f"[ROLE CHANGE] New role: {role_name} (ID: {target_role.id})")
+                
+                message = Mail(
+                    from_email=current_app.config['MAIL_DEFAULT_SENDER'],
+                    to_emails=user.email,
+                    subject=f'Your role has been updated in {org_name}',
+                    html_content=f'''
+                    <html>
+                        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                                <h2 style="color: #0d6efd;">Role Updated</h2>
+                                <p>Hello {user.display_name()},</p>
+                                <p>Your role in <strong>{org_name}</strong> has been updated by {admin_name}.</p>
+                                <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #0d6efd; margin: 20px 0;">
+                                    <p style="margin: 0;"><strong>New Role:</strong> {role_name}</p>
+                                </div>
+                                <p>This change may affect your permissions and access within the organisation.</p>
+                                <p>
+                                    <a href="{dashboard_url}" style="display: inline-block; padding: 10px 20px; background-color: #0d6efd; color: white; text-decoration: none; border-radius: 5px;">View Dashboard</a>
+                                </p>
+                                <p style="color: #6c757d; font-size: 0.9em; margin-top: 30px;">
+                                    If you have any questions about this change, please contact your organisation administrator.
+                                </p>
+                            </div>
+                        </body>
+                    </html>
+                    '''
+                )
+                
+                sg = SendGridAPIClient(current_app.config['SENDGRID_API_KEY'])
+                response = sg.send(message)
+                end_time = datetime.datetime.now()
+                duration = (end_time - start_time).total_seconds()
+                current_app.logger.info(f"[ROLE CHANGE] Email API call completed in {duration:.3f} seconds, status: {response.status_code}")
+                current_app.logger.info(f"[ROLE CHANGE] Email sent to {user.email} with role: {role_name}")
+        except Exception as e:
+            current_app.logger.error(f"[ROLE CHANGE] Failed to send role change notification: {e}", exc_info=True)
+            # Don't fail the role update if email fails
+        
         flash('Role updated.', 'success')
     except Exception:
         db.session.rollback()
@@ -726,7 +806,7 @@ def org_admin_invite_member():
         if email_sent:
             flash(f'User re-invited to the organization. Invitation email sent to {email}.', 'success')
         else:
-            flash('User added to the organization.', 'success')
+            flash('User added to the organisation.', 'success')
     return redirect(url_for('main.org_admin_dashboard'))
 
 
@@ -917,6 +997,13 @@ def org_admin_resend_invite():
         flash('Invite not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
+    # Ensure we are reading the latest invite tracking fields in case this row
+    # was updated in another session/process (or earlier request).
+    try:
+        db.session.refresh(membership)
+    except Exception:
+        pass
+
     user = db.session.get(User, int(membership.user_id)) if membership else None
     if not _is_pending_org_invite(membership, user):
         flash('That invite is no longer pending.', 'info')
@@ -1062,7 +1149,7 @@ def org_admin_remove_member():
             )
             active_admins = sum(1 for m in active_memberships if _membership_has_permission(m, 'users.manage'))
             if active_admins <= 1:
-                flash('You are the only admin. Promote another admin before leaving the organization.', 'error')
+                flash('You are the only admin. Promote another admin before leaving the organisation.', 'error')
                 return redirect(url_for('main.org_admin_dashboard'))
 
     try:
@@ -1070,7 +1157,7 @@ def org_admin_remove_member():
             # Completely delete the membership
             db.session.delete(membership)
             db.session.commit()
-            flash('Member permanently removed from the organization.', 'success')
+            flash('Member permanently removed from the organisation.', 'success')
         else:  # disable
             # Just deactivate
             membership.is_active = False
@@ -1476,7 +1563,7 @@ def organization_settings():
         return maybe
 
     if not getattr(current_user, 'organization_id', None):
-        flash('No organization is associated with this account.', 'error')
+        flash('No organisation is associated with this account.', 'error')
         return redirect(url_for('main.dashboard'))
 
     organization = db.session.get(Organization, int(current_user.organization_id))
