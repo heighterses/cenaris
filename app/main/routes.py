@@ -18,9 +18,37 @@ import json
 
 _RESEND_ORG_INVITE_COOLDOWN_SECONDS = 60 * 5
 
+_ORG_INVITE_TOKEN_SALT = 'org-invite'
+
 
 _ORG_LOGO_CACHE: dict[tuple[int, str], tuple[float, bytes, str | None]] = {}
 _ORG_LOGO_CACHE_LOCK = threading.Lock()
+
+
+def _safe_int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name) or default)
+    except Exception:
+        return default
+
+
+def _org_invite_token_ttl_seconds() -> int:
+    # Keep in sync with auth.routes._org_invite_token_ttl_seconds
+    return max(60, _safe_int_env('ORG_INVITE_TOKEN_TTL_SECONDS', 60 * 60 * 24))
+
+
+def _format_duration_seconds(seconds: int) -> str:
+    seconds = int(seconds or 0)
+    if seconds <= 0:
+        return 'a short time'
+    if seconds % (60 * 60 * 24) == 0:
+        days = seconds // (60 * 60 * 24)
+        return f'{days} day' if days == 1 else f'{days} days'
+    if seconds % (60 * 60) == 0:
+        hours = seconds // (60 * 60)
+        return f'{hours} hour' if hours == 1 else f'{hours} hours'
+    minutes = max(1, seconds // 60)
+    return f'{minutes} minute' if minutes == 1 else f'{minutes} minutes'
 
 
 def _etag_matches_if_none_match(if_none_match: str | None, etag: str) -> bool:
@@ -204,6 +232,11 @@ def _password_reset_token(user: User) -> str:
     return _serializer().dumps({'user_id': user.id, 'email': user.email}, salt='password-reset')
 
 
+def _org_invite_token(user: User) -> str:
+    # Must match the implementation in auth/routes.py
+    return _serializer().dumps({'user_id': user.id, 'email': user.email}, salt=_ORG_INVITE_TOKEN_SALT)
+
+
 def _send_invite_email(user: User, reset_url: str, organization: Organization) -> None:
     if not _mail_configured():
         current_app.logger.warning('MAIL not configured; invite reset URL: %s', reset_url)
@@ -213,6 +246,7 @@ def _send_invite_email(user: User, reset_url: str, organization: Organization) -
     body = (
         f"You've been invited to join {organization.name} on Cenaris.\n\n"
         f"Set your password here: {reset_url}\n\n"
+        f"This link expires in {_format_duration_seconds(_org_invite_token_ttl_seconds())}.\n\n"
         "If you weren't expecting this invite, you can ignore this email."
     )
     try:
@@ -326,7 +360,7 @@ def org_admin_dashboard():
     if maybe is not None:
         return maybe
 
-    from app.main.forms import InviteMemberForm, MembershipActionForm, PendingInviteResendForm, PendingInviteRevokeForm, UpdateMemberRoleForm
+    from app.main.forms import InviteMemberForm, MembershipActionForm, PendingInviteResendForm, PendingInviteRevokeForm, UpdateMemberRoleForm, UpdateMemberDepartmentForm
     from app.models import Department
 
     org_id = _active_org_id()
@@ -389,6 +423,7 @@ def org_admin_dashboard():
     ]
     member_action_form = MembershipActionForm()
     update_role_form = UpdateMemberRoleForm()
+    update_department_form = UpdateMemberDepartmentForm()
     pending_invite_resend_form = PendingInviteResendForm()
     pending_invite_revoke_form = PendingInviteRevokeForm()
 
@@ -418,14 +453,113 @@ def org_admin_dashboard():
         can_current_user_leave_org=can_current_user_leave_org,
         user_count=user_count,
         document_count=document_count,
+        invite_expires_in=_format_duration_seconds(_org_invite_token_ttl_seconds()),
         invite_form=invite_form,
         member_action_form=member_action_form,
         update_role_form=update_role_form,
+        update_department_form=update_department_form,
         pending_invite_resend_form=pending_invite_resend_form,
         pending_invite_revoke_form=pending_invite_revoke_form,
         departments=departments,
         available_roles=available_roles,
     )
+
+
+@bp.route('/org/admin/members/department', methods=['POST'])
+@login_required
+def org_admin_update_member_department():
+    """Update a member's department assignment."""
+    maybe = _require_org_permission('users.manage')
+    if maybe is not None:
+        return maybe
+
+    from flask import request, jsonify
+    from app.main.forms import UpdateMemberDepartmentForm
+    from app.models import Department
+
+    def _wants_json() -> bool:
+        return (request.headers.get('X-Requested-With') == 'fetch') or (request.accept_mimetypes.best == 'application/json')
+
+    org_id = _active_org_id()
+    organization = db.session.get(Organization, int(org_id))
+    if not organization:
+        if _wants_json():
+            return jsonify(success=False, error='Organisation not found.'), 404
+        flash('Organisation not found.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    form = UpdateMemberDepartmentForm()
+
+    # Populate choices so WTForms validates the selection.
+    departments = (
+        Department.query
+        .filter_by(organization_id=int(org_id))
+        .order_by(Department.name.asc())
+        .all()
+    )
+    form.department_id.choices = [('', 'Unassigned')] + [(str(d.id), d.name) for d in departments]
+
+    if not form.validate_on_submit():
+        if _wants_json():
+            return jsonify(success=False, error='Invalid request.'), 400
+        flash('Invalid request.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    membership_id_raw = (form.membership_id.data or '').strip()
+    dept_id_raw = (form.department_id.data or '').strip()
+
+    if not membership_id_raw.isdigit():
+        if _wants_json():
+            return jsonify(success=False, error='Invalid request.'), 400
+        flash('Invalid request.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    membership = db.session.get(OrganizationMembership, int(membership_id_raw))
+    if not membership or int(membership.organization_id) != int(org_id):
+        if _wants_json():
+            return jsonify(success=False, error='Membership not found.'), 404
+        flash('Membership not found.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    new_dept = None
+    if dept_id_raw:
+        if not dept_id_raw.isdigit():
+            if _wants_json():
+                return jsonify(success=False, error='Invalid department.'), 400
+            flash('Invalid department.', 'error')
+            return redirect(url_for('main.org_admin_dashboard'))
+
+        new_dept = db.session.get(Department, int(dept_id_raw))
+        if not new_dept or int(new_dept.organization_id) != int(org_id):
+            if _wants_json():
+                return jsonify(success=False, error='Department not found.'), 404
+            flash('Department not found.', 'error')
+            return redirect(url_for('main.org_admin_dashboard'))
+
+    try:
+        membership.department_id = int(new_dept.id) if new_dept else None
+        db.session.commit()
+
+        if _wants_json():
+            return jsonify(
+                success=True,
+                membership_id=int(membership.id),
+                department={
+                    'id': int(new_dept.id),
+                    'name': new_dept.name,
+                    'color': new_dept.color,
+                } if new_dept else None,
+            )
+
+        flash('Department updated.', 'success')
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed updating member department')
+        if _wants_json():
+            return jsonify(success=False, error='Failed to update department. Please try again.'), 500
+        flash('Failed to update department. Please try again.', 'error')
+
+    return redirect(url_for('main.org_admin_dashboard'))
 
 
 @bp.route('/org/admin/members/role', methods=['POST'])
@@ -436,12 +570,19 @@ def org_admin_update_member_role():
     if maybe is not None:
         return maybe
 
+    from flask import request, jsonify
+
+    def _wants_json() -> bool:
+        return (request.headers.get('X-Requested-With') == 'fetch') or (request.accept_mimetypes.best == 'application/json')
+
     from app.main.forms import UpdateMemberRoleForm
     from app.models import RBACRole
 
     org_id = _active_org_id()
     organization = db.session.get(Organization, int(org_id))
     if not organization:
+        if _wants_json():
+            return jsonify(success=False, error='Organisation not found.'), 404
         flash('Organisation not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
@@ -460,6 +601,8 @@ def org_admin_update_member_role():
         form.role_id.choices = []
 
     if not form.validate_on_submit():
+        if _wants_json():
+            return jsonify(success=False, error='Invalid request.'), 400
         flash('Invalid request.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
@@ -467,16 +610,22 @@ def org_admin_update_member_role():
     role_id_raw = (form.role_id.data or '').strip()
 
     if not membership_id_raw.isdigit() or not role_id_raw.isdigit():
+        if _wants_json():
+            return jsonify(success=False, error='Invalid request.'), 400
         flash('Invalid request.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
     membership = db.session.get(OrganizationMembership, int(membership_id_raw))
     if not membership or int(membership.organization_id) != int(org_id):
+        if _wants_json():
+            return jsonify(success=False, error='Membership not found.'), 404
         flash('Membership not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
     target_role = db.session.get(RBACRole, int(role_id_raw))
     if not target_role or int(target_role.organization_id) != int(org_id):
+        if _wants_json():
+            return jsonify(success=False, error='Role not found.'), 404
         flash('Role not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
@@ -495,6 +644,8 @@ def org_admin_update_member_role():
         )
         active_admins = sum(1 for m in active_memberships if _membership_has_permission(m, 'users.manage'))
         if active_admins <= 1:
+            if _wants_json():
+                return jsonify(success=False, error='Cannot change role: you would remove the last admin.'), 400
             flash('Cannot change role: you would remove the last admin.', 'error')
             return redirect(url_for('main.org_admin_dashboard'))
 
@@ -517,69 +668,23 @@ def org_admin_update_member_role():
         # This ensures display_role_name shows the correct new role
         db.session.expire(membership, ['rbac_role'])
         db.session.refresh(membership)
-        
-        # Send email notification to user about role change
-        try:
-            from app.auth.routes import _mail_configured
-            from flask import request
-            import datetime
-            
-            if _mail_configured():
-                from sendgrid import SendGridAPIClient
-                from sendgrid.helpers.mail import Mail
-                
-                user = membership.user
-                role_name = target_role.name
-                admin_name = current_user.display_name()
-                org_name = organization.name
-                dashboard_url = request.url_root.rstrip('/') + url_for('main.dashboard')
-                
-                # Log start time
-                start_time = datetime.datetime.now()
-                current_app.logger.info(f"[ROLE CHANGE] Starting email send to {user.email} at {start_time.strftime('%H:%M:%S.%f')}")
-                current_app.logger.info(f"[ROLE CHANGE] New role: {role_name} (ID: {target_role.id})")
-                
-                message = Mail(
-                    from_email=current_app.config['MAIL_DEFAULT_SENDER'],
-                    to_emails=user.email,
-                    subject=f'Your role has been updated in {org_name}',
-                    html_content=f'''
-                    <html>
-                        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                                <h2 style="color: #0d6efd;">Role Updated</h2>
-                                <p>Hello {user.display_name()},</p>
-                                <p>Your role in <strong>{org_name}</strong> has been updated by {admin_name}.</p>
-                                <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #0d6efd; margin: 20px 0;">
-                                    <p style="margin: 0;"><strong>New Role:</strong> {role_name}</p>
-                                </div>
-                                <p>This change may affect your permissions and access within the organisation.</p>
-                                <p>
-                                    <a href="{dashboard_url}" style="display: inline-block; padding: 10px 20px; background-color: #0d6efd; color: white; text-decoration: none; border-radius: 5px;">View Dashboard</a>
-                                </p>
-                                <p style="color: #6c757d; font-size: 0.9em; margin-top: 30px;">
-                                    If you have any questions about this change, please contact your organisation administrator.
-                                </p>
-                            </div>
-                        </body>
-                    </html>
-                    '''
-                )
-                
-                sg = SendGridAPIClient(current_app.config['SENDGRID_API_KEY'])
-                response = sg.send(message)
-                end_time = datetime.datetime.now()
-                duration = (end_time - start_time).total_seconds()
-                current_app.logger.info(f"[ROLE CHANGE] Email API call completed in {duration:.3f} seconds, status: {response.status_code}")
-                current_app.logger.info(f"[ROLE CHANGE] Email sent to {user.email} with role: {role_name}")
-        except Exception as e:
-            current_app.logger.error(f"[ROLE CHANGE] Failed to send role change notification: {e}", exc_info=True)
-            # Don't fail the role update if email fails
-        
+        role_name = target_role.name
+        if _wants_json():
+            return jsonify(
+                success=True,
+                membership_id=int(membership.id),
+                user_id=int(membership.user_id),
+                new_role_name=role_name,
+                is_current_user=(int(membership.user_id) == int(current_user.id)),
+            )
+
         flash('Role updated.', 'success')
     except Exception:
         db.session.rollback()
         current_app.logger.exception('Failed updating member role')
+        if _wants_json():
+            return jsonify(success=False, error='Failed to update role. Please try again.'), 500
+
         flash('Failed to update role. Please try again.', 'error')
 
     return redirect(url_for('main.org_admin_dashboard'))
@@ -789,7 +894,7 @@ def org_admin_invite_member():
     # For users with existing password, they can use their existing password to login
     email_sent = False
     try:
-        token = _password_reset_token(user)
+        token = _org_invite_token(user)
         reset_url = url_for('auth.reset_password', token=token, _external=True)
         _send_invite_email(user, reset_url, organization)
         email_sent = True
@@ -799,12 +904,18 @@ def org_admin_invite_member():
 
     if created_user:
         if email_sent:
-            flash(f'Invitation sent to {email}! They will receive an email to set their password and join.', 'success')
+            flash(
+                f'Invitation sent to {email}! The link expires in {_format_duration_seconds(_org_invite_token_ttl_seconds())}.',
+                'success',
+            )
         else:
             flash(f'User created but email not configured. Share this invite link manually with {email}.', 'warning')
     else:
         if email_sent:
-            flash(f'User re-invited to the organization. Invitation email sent to {email}.', 'success')
+            flash(
+                f'User re-invited. The link expires in {_format_duration_seconds(_org_invite_token_ttl_seconds())}.',
+                'success',
+            )
         else:
             flash('User added to the organisation.', 'success')
     return redirect(url_for('main.org_admin_dashboard'))
@@ -1031,13 +1142,13 @@ def org_admin_resend_invite():
         return redirect(url_for('main.org_admin_dashboard'))
 
     try:
-        token = _password_reset_token(user)
+        token = _org_invite_token(user)
         reset_url = url_for('auth.reset_password', token=token, _external=True)
         _send_invite_email(user, reset_url, organization)
     except Exception:
         current_app.logger.exception('Failed to send invite email')
 
-    flash('Invite resent (or logged if mail not configured).', 'success')
+    flash(f'Invite resent. The link expires in {_format_duration_seconds(_org_invite_token_ttl_seconds())}.', 'success')
     return redirect(url_for('main.org_admin_dashboard'))
 
 
@@ -1547,9 +1658,11 @@ def ai_evidence():
                     'summary': f"Compliance score: {framework_data['score']}% - Status: {framework_data['status']}"
                 })
     
-    return render_template('main/ai_evidence.html', 
-                         title='AI Evidence',
-                         ai_evidence_entries=ai_evidence_entries)
+    return render_template(
+        'main/ai_evidence.html',
+        title='Upload Evidence',
+        ai_evidence_entries=ai_evidence_entries,
+    )
 
 
 @bp.route('/organization/settings', methods=['GET', 'POST'])
@@ -1580,6 +1693,8 @@ def organization_settings():
             if profile_form.validate_on_submit():
                 organization.name = profile_form.name.data.strip()
                 organization.abn = (profile_form.abn.data or '').strip() or None
+                organization.acn = (profile_form.acn.data or '').strip() or None
+                organization.contact_number = (profile_form.contact_number.data or '').strip() or None
                 organization.address = (profile_form.address.data or '').strip() or None
                 organization.contact_email = (profile_form.contact_email.data or '').strip().lower() or None
 
@@ -1924,6 +2039,7 @@ def help():
 def profile():
     """User profile route."""
     from app.main.forms import UserProfileForm
+    from app.models import Department
 
     form = UserProfileForm(obj=current_user)
 
@@ -1945,7 +2061,105 @@ def profile():
             flash('Profile update failed. Please try again.', 'error')
             current_app.logger.error(f"Profile update failed for user {current_user.id}: {e}")
 
-    return render_template('main/profile.html', title='My Profile', form=form)
+    # Get current membership and departments for self-assignment
+    current_membership = None
+    departments = []
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        current_membership = (
+            OrganizationMembership.query
+            .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+            .first()
+        )
+        departments = (
+            Department.query
+            .filter_by(organization_id=int(org_id))
+            .order_by(Department.name.asc())
+            .all()
+        )
+
+    # Get current membership and departments for self-assignment
+    current_membership = None
+    departments = []
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        current_membership = (
+            OrganizationMembership.query
+            .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+            .first()
+        )
+        departments = (
+            Department.query
+            .filter_by(organization_id=int(org_id))
+            .order_by(Department.name.asc())
+            .all()
+        )
+
+    return render_template(
+        'main/profile.html',
+        title='My Profile',
+        form=form,
+        current_membership=current_membership,
+        departments=departments
+    )
+
+
+@bp.route('/profile/department', methods=['POST'])
+@login_required
+def profile_update_department():
+    """Allow user to assign themselves to a department."""
+    from app.models import Department
+
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        flash('No organisation associated with your account.', 'error')
+        return redirect(url_for('main.profile'))
+
+    membership = (
+        OrganizationMembership.query
+        .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+        .first()
+    )
+    if not membership:
+        flash('Membership not found.', 'error')
+        return redirect(url_for('main.profile'))
+
+    dept_id_str = (request.form.get('department_id') or '').strip()
+    
+    if not dept_id_str:
+        # Unassign department
+        membership.department_id = None
+        try:
+            db.session.commit()
+            flash('Department unassigned.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash('Failed to update department.', 'error')
+            current_app.logger.error(f"Failed to unassign department for user {current_user.id}: {e}")
+        return redirect(url_for('main.profile'))
+
+    try:
+        dept_id = int(dept_id_str)
+    except ValueError:
+        flash('Invalid department selected.', 'error')
+        return redirect(url_for('main.profile'))
+
+    # Verify department belongs to the same organization
+    department = db.session.get(Department, dept_id)
+    if not department or department.organization_id != int(org_id):
+        flash('Invalid department selected.', 'error')
+        return redirect(url_for('main.profile'))
+
+    membership.department_id = dept_id
+    try:
+        db.session.commit()
+        flash(f'Department updated to "{department.name}".', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Failed to update department.', 'error')
+        current_app.logger.error(f"Failed to update department for user {current_user.id}: {e}")
+
+    return redirect(url_for('main.profile'))
 
 
 @bp.route('/profile/avatar')
