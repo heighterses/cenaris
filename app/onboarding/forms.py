@@ -6,9 +6,9 @@ from wtforms.validators import DataRequired, Email, Length, Optional
 
 class OnboardingOrganizationForm(FlaskForm):
     organization_name = StringField(
-        'Legal Organization Name',
+        'Legal Organisation Name',
         validators=[DataRequired(), Length(min=2, max=100)],
-        render_kw={'class': 'form-control form-control-lg', 'placeholder': 'Your organization name'},
+        render_kw={'class': 'form-control form-control-lg', 'placeholder': 'Your organisation name'},
     )
 
     trading_name = StringField(
@@ -18,19 +18,27 @@ class OnboardingOrganizationForm(FlaskForm):
     )
 
     abn = StringField(
-        'ABN / ACN',
+        'ABN (required)',
         validators=[DataRequired(), Length(max=20)],
-        render_kw={'class': 'form-control form-control-lg', 'placeholder': 'ABN / ACN'},
+        render_kw={'class': 'form-control form-control-lg', 'placeholder': 'ABN'},
+    )
+
+    acn = StringField(
+        'ACN (optional)',
+        validators=[Optional(), Length(max=20)],
+        render_kw={'class': 'form-control form-control-lg', 'placeholder': 'ACN (optional)'},
     )
 
     organization_type = SelectField(
-        'Organization Type',
+        'Organisation Type',
         choices=[
             ('', 'Select...'),
-            ('sole_trader', 'Sole trader'),
+            ('sole_trader', 'Sole Trader'),
             ('company', 'Company'),
-            ('not_for_profit', 'Not-for-profit'),
-            ('trust_partnership', 'Trust / partnership'),
+            ('not_for_profit', 'Not-for-Profit'),
+            ('partnership', 'Partnership'),
+            ('trust', 'Trust'),
+            ('government', 'Government / Public Sector'),
         ],
         validators=[DataRequired()],
         render_kw={'class': 'form-select minimal-select'},

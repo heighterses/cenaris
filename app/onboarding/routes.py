@@ -162,6 +162,7 @@ def organization():
         form.organization_name.data = organization.name
         form.trading_name.data = getattr(organization, 'trading_name', None)
         form.abn.data = organization.abn
+        form.acn.data = getattr(organization, 'acn', None)
         form.organization_type.data = getattr(organization, 'organization_type', '') or ''
         form.contact_email.data = organization.contact_email or (current_user.email or '').strip().lower()
         form.address.data = organization.address
@@ -182,6 +183,7 @@ def organization():
             organization.name = form.organization_name.data.strip()
             organization.trading_name = (form.trading_name.data or '').strip() or None
             organization.abn = (form.abn.data or '').strip() or None
+            organization.acn = (form.acn.data or '').strip() or None
             organization.organization_type = (form.organization_type.data or '').strip() or None
             organization.industry = (form.industry.data or '').strip() or None
             organization.address = (form.address.data or '').strip() or None
@@ -204,7 +206,7 @@ def organization():
             return redirect(url_for('onboarding.billing'))
         except Exception:
             db.session.rollback()
-            flash('Failed to create organization. Please try again.', 'error')
+            flash('Failed to create organisation. Please try again.', 'error')
 
     return render_template('onboarding/organization.html', title='Setup Organization', form=form)
 
@@ -332,13 +334,13 @@ def theme():
     
     # Ensure onboarding steps are complete before allowing theme selection
     if not organization.onboarding_complete():
-        flash('Please complete your organization setup first.', 'info')
+        flash('Please complete your organisation setup first.', 'info')
         return redirect(url_for('onboarding.organization'))
 
     form = OnboardingThemeForm()
 
     if request.method == 'POST' and request.form.get('skip') == '1':
-        flash('You can change the theme later in Organization Settings.', 'info')
+        flash('You can change the theme later in Organisation Settings.', 'info')
         _maybe_send_welcome_email(int(current_user.id))
         return redirect(url_for('main.dashboard'))
 

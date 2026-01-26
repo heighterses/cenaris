@@ -7,6 +7,7 @@ import os
 import logging
 import threading
 import time
+import contextlib
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -25,6 +26,31 @@ logger = logging.getLogger(__name__)
 
 _ORG_SWITCHER_CONTEXT_CACHE: dict[tuple[int, int | None], tuple[float, dict]] = {}
 _ORG_SWITCHER_CONTEXT_CACHE_LOCK = threading.Lock()
+
+
+def invalidate_org_switcher_context_cache(user_id: int, org_id: int | None = None) -> None:
+    """Invalidate cached org switcher/template context for a user.
+
+    The org switcher context is intentionally cached (perf), but some actions
+    (like role changes) must reflect immediately in the UI.
+    """
+    try:
+        user_id_int = int(user_id)
+    except Exception:
+        return
+
+    try:
+        org_id_int = int(org_id) if org_id is not None else None
+    except Exception:
+        org_id_int = None
+
+    with _ORG_SWITCHER_CONTEXT_CACHE_LOCK:
+        if org_id_int is not None:
+            _ORG_SWITCHER_CONTEXT_CACHE.pop((user_id_int, org_id_int), None)
+        # Also clear any other cached entries for this user (multi-org, None key, etc.)
+        keys_to_delete = [k for k in _ORG_SWITCHER_CONTEXT_CACHE.keys() if k[0] == user_id_int]
+        for k in keys_to_delete:
+            _ORG_SWITCHER_CONTEXT_CACHE.pop(k, None)
 
 
 def _maybe_enable_system_cert_store() -> None:
@@ -141,6 +167,8 @@ def create_app(config_name=None):
     def _start_request_timer():
         """Start timing the request for performance debugging."""
         g.request_start_time = time.time()
+        g.sql_query_count = 0
+        g.sql_query_time_s = 0.0
 
     @app.after_request
     def _log_slow_requests(response):
@@ -152,9 +180,23 @@ def create_app(config_name=None):
                 if elapsed > 1.0:
                     endpoint = request.endpoint or 'unknown'
                     method = request.method
-                    current_app.logger.warning(
-                        f'SLOW REQUEST: {method} {endpoint} took {elapsed:.2f}s'
-                    )
+                    extra = ''
+                    try:
+                        qn = int(getattr(g, 'sql_query_count', 0) or 0)
+                        qt = float(getattr(g, 'sql_query_time_s', 0.0) or 0.0)
+                        extra = f' | sql: {qn} queries, {qt:.3f}s'
+                    except Exception:
+                        extra = ''
+                    logger.warning(f'SLOW REQUEST: {method} {endpoint} took {elapsed:.2f}s{extra}')
+
+                # Optional: always log SQL timing when explicitly enabled.
+                perf_flag = (os.environ.get('PERF_SQL_LOG') or '0').strip().lower()
+                if perf_flag in {'1', 'true', 'yes', 'on'}:
+                    endpoint = request.endpoint or 'unknown'
+                    method = request.method
+                    qn = int(getattr(g, 'sql_query_count', 0) or 0)
+                    qt = float(getattr(g, 'sql_query_time_s', 0.0) or 0.0)
+                    logger.info(f'PERF SQL: {method} {endpoint} | {qn} queries, {qt:.3f}s')
         except Exception:
             pass
         return response
@@ -162,6 +204,42 @@ def create_app(config_name=None):
     # Initialize database extensions
     db.init_app(app)
     migrate.init_app(app, db)
+
+    # ---- Optional SQL performance instrumentation ----
+    # This is extremely useful for diagnosing 2-3s page loads (DB vs template vs network).
+    # It is lightweight, but we still keep it "quiet" unless PERF_SQL_LOG=1 or the request is slow.
+    try:
+        from sqlalchemy import event
+
+        if not getattr(app, '_perf_sql_listeners_installed', False):
+            with app.app_context():
+                engine = db.engine
+
+            @event.listens_for(engine, 'before_cursor_execute')
+            def _perf_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+                try:
+                    conn.info['__perf_query_start_time'] = time.perf_counter()
+                except Exception:
+                    pass
+
+            @event.listens_for(engine, 'after_cursor_execute')
+            def _perf_after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+                try:
+                    start = conn.info.pop('__perf_query_start_time', None)
+                    if start is None:
+                        return
+                    duration = time.perf_counter() - float(start)
+                    # Only count if we're in a request context.
+                    with contextlib.suppress(Exception):
+                        g.sql_query_count = int(getattr(g, 'sql_query_count', 0) or 0) + 1
+                        g.sql_query_time_s = float(getattr(g, 'sql_query_time_s', 0.0) or 0.0) + float(duration)
+                except Exception:
+                    pass
+
+            app._perf_sql_listeners_installed = True
+    except Exception:
+        # Don't ever break app startup due to perf tooling.
+        pass
 
     # Initialize OAuth + Mail
     oauth.init_app(app)
@@ -386,17 +464,6 @@ def create_app(config_name=None):
     from app.onboarding import bp as onboarding_bp
     app.register_blueprint(onboarding_bp, url_prefix='/onboarding')
     
-    # Add security headers
-    @app.after_request
-    def add_security_headers(response):
-        """Add security headers to all responses."""
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['X-Frame-Options'] = 'DENY'
-        response.headers['X-XSS-Protection'] = '1; mode=block'
-        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-        return response
-    
     # Add CSP header for production
     if not app.debug:
         @app.after_request
@@ -511,8 +578,8 @@ def create_app(config_name=None):
                     can_manage_roles = current_user.has_permission('roles.manage', org_id=int(active_org_id))
                     is_org_admin_active = bool(can_manage_team)
 
-                    # ONLY load roles/departments if the user needs the invite modal (admin pages).
-                    if can_invite_member and request.endpoint and 'admin' in request.endpoint:
+                    # Load roles/departments if the user has invite permissions (for the floating invite modal).
+                    if can_invite_member:
                         try:
                             from app.models import RBACRole, Department
 

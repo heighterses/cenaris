@@ -8,11 +8,11 @@ class OrganizationProfileSettingsForm(FlaskForm):
     form_name = HiddenField(default='profile')
 
     name = StringField(
-        'Organization Name',
+        'Organisation Name',
         validators=[DataRequired(), Length(min=2, max=100)],
         render_kw={
             'class': 'form-control form-control-lg',
-            'placeholder': 'Organization name'
+            'placeholder': 'Organisation name'
         },
     )
 
@@ -22,6 +22,24 @@ class OrganizationProfileSettingsForm(FlaskForm):
         render_kw={
             'class': 'form-control form-control-lg',
             'placeholder': 'ABN (optional)'
+        },
+    )
+
+    acn = StringField(
+        'ACN',
+        validators=[Optional(), Length(max=20)],
+        render_kw={
+            'class': 'form-control form-control-lg',
+            'placeholder': 'ACN (optional)'
+        },
+    )
+
+    contact_number = StringField(
+        'Contact Number',
+        validators=[Optional(), Length(max=40)],
+        render_kw={
+            'class': 'form-control form-control-lg',
+            'placeholder': 'Contact number (optional)'
         },
     )
 
@@ -243,6 +261,22 @@ class UpdateMemberRoleForm(FlaskForm):
 
     submit = SubmitField(
         'Update role',
+        render_kw={'class': 'btn btn-sm btn-primary'},
+    )
+
+
+class UpdateMemberDepartmentForm(FlaskForm):
+    membership_id = HiddenField(validators=[DataRequired()])
+    department_id = SelectField(
+        'Department',
+        choices=[('', 'Unassigned')],
+        validators=[Optional()],
+        render_kw={'class': 'form-select form-select-sm'},
+        default='',
+    )
+
+    submit = SubmitField(
+        'Update department',
         render_kw={'class': 'btn btn-sm btn-primary'},
     )
 

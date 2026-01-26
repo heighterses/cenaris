@@ -8,22 +8,68 @@ from app.models import Document, Organization, OrganizationMembership
 from app import db
 from datetime import datetime, timezone
 import logging
+import re
+import os
 
 logger = logging.getLogger(__name__)
+
+def get_versioned_filename(original_filename, organization_id):
+    """
+    Check if filename exists in the organization and return a versioned name if needed.
+    E.g., policy.pdf -> policy (1).pdf -> policy (2).pdf
+    """
+    # Check if the exact filename already exists
+    existing = Document.query.filter_by(
+        filename=original_filename,
+        organization_id=organization_id
+    ).first()
+    
+    if not existing:
+        # Filename doesn't exist, use original
+        return original_filename
+    
+    # Parse filename and extension
+    name, ext = os.path.splitext(original_filename)
+    
+    # Find all files with similar names (e.g., "policy.pdf", "policy (1).pdf", "policy (2).pdf")
+    # Pattern: "name (number).ext"
+    pattern = re.escape(name) + r'(?: \((\d+)\))?' + re.escape(ext)
+    
+    all_docs = Document.query.filter_by(organization_id=organization_id).all()
+    
+    version_numbers = []
+    for doc in all_docs:
+        match = re.fullmatch(pattern, doc.filename)
+        if match:
+            version_str = match.group(1)
+            if version_str:
+                version_numbers.append(int(version_str))
+            else:
+                version_numbers.append(0)  # Original file without version number
+    
+    if not version_numbers:
+        return original_filename
+    
+    # Find the next available version number
+    next_version = max(version_numbers) + 1
+    return f"{name} ({next_version}){ext}"
 
 @bp.route('/upload', methods=['POST'])
 @login_required
 def upload_file():
     """Handle file upload to Azure Blob Storage."""
     try:
+        # Remember where user came from to redirect back after upload
+        referrer = request.referrer or url_for('main.dashboard')
+        
         org_id = getattr(current_user, 'organization_id', None)
         if not org_id:
-            flash('Please select an organization before uploading.', 'info')
+            flash('Please select an organisation before uploading.', 'info')
             return redirect(url_for('onboarding.organization'))
 
         if not current_user.has_permission('documents.upload', org_id=int(org_id)):
             flash('You do not have permission to upload documents.', 'error')
-            return redirect(url_for('main.dashboard'))
+            return redirect(referrer)
 
         membership = (
             OrganizationMembership.query
@@ -31,12 +77,12 @@ def upload_file():
             .first()
         )
         if not membership:
-            flash('You do not have access to that organization.', 'error')
+            flash('You do not have access to that organisation.', 'error')
             return redirect(url_for('onboarding.organization'))
 
         organization = db.session.get(Organization, int(org_id))
         if not organization:
-            flash('Organization not found.', 'error')
+            flash('Organisation not found.', 'error')
             return redirect(url_for('onboarding.organization'))
 
         # Billing can be deferred; do not block document uploads.
@@ -47,21 +93,24 @@ def upload_file():
         # Check if file is present in request
         if 'file' not in request.files:
             flash('No file selected. Please choose a file to upload.', 'error')
-            return redirect(url_for('main.dashboard'))
+            return redirect(referrer)
         
         file = request.files['file']
         
         # Check if file was actually selected
         if file.filename == '':
             flash('No file selected. Please choose a file to upload.', 'error')
-            return redirect(url_for('main.dashboard'))
+            return redirect(referrer)
         
         # Validate the file
         validation_result = FileValidationService.validate_file(file.stream, file.filename)
         
         if not validation_result['success']:
             flash(f"File validation failed: {validation_result['error']}", 'error')
-            return redirect(url_for('main.dashboard'))
+            return redirect(referrer)
+        
+        # Check for duplicate filename and generate versioned name if needed
+        versioned_filename = get_versioned_filename(validation_result['original_filename'], int(org_id))
         
         # Initialize Azure Storage service
         storage_service = AzureBlobStorageService()
@@ -69,7 +118,7 @@ def upload_file():
         if not storage_service.is_configured():
             flash('File upload is currently unavailable. Azure Storage is not configured.', 'error')
             logger.error("Azure Storage not configured for file upload")
-            return redirect(url_for('main.dashboard'))
+            return redirect(referrer)
         
         # Generate unique file path for ADLS
         file_path = storage_service.generate_blob_name(
@@ -82,7 +131,7 @@ def upload_file():
         metadata = {
             'uploaded_by': str(current_user.id),
             'uploaded_by_email': current_user.email,
-            'original_filename': validation_result['original_filename'],
+            'original_filename': versioned_filename,
             'upload_timestamp': str(int(datetime.now(timezone.utc).timestamp()))
         }
         
@@ -100,7 +149,7 @@ def upload_file():
         if not upload_result['success']:
             flash(f"Upload failed: {upload_result['error']}", 'error')
             logger.error(f"Azure upload failed for user {current_user.id}: {upload_result['error']}")
-            return redirect(url_for('main.dashboard'))
+            return redirect(referrer)
         
         # Save document metadata to database
         try:
@@ -111,7 +160,7 @@ def upload_file():
                 db_content_type = db_content_type[:50]
 
             document = Document(
-                filename=validation_result['original_filename'],
+                filename=versioned_filename,
                 blob_name=file_path,
                 file_size=validation_result['file_size'],
                 content_type=db_content_type,
@@ -122,8 +171,14 @@ def upload_file():
             db.session.commit()
 
             storage_type = upload_result.get('storage_type', 'ADLS_Gen2')
-            flash(f'File "{validation_result["original_filename"]}" uploaded successfully to {storage_type}!', 'success')
-            logger.info(f"File uploaded successfully: {file_path} by user {current_user.id} to {storage_type}")
+            
+            # Show appropriate message based on whether filename was versioned
+            if versioned_filename != validation_result['original_filename']:
+                flash(f'File uploaded as "{versioned_filename}" (original name already exists).', 'success')
+            else:
+                flash(f'File "{versioned_filename}" uploaded successfully to {storage_type}!', 'success')
+            
+            logger.info(f"File uploaded successfully: {file_path} as {versioned_filename} by user {current_user.id} to {storage_type}")
         
         except Exception as e:
             db.session.rollback()
@@ -132,12 +187,12 @@ def upload_file():
             flash('Upload failed: Database error occurred.', 'error')
             logger.error(f"Database error during file upload: {e}")
         
-        return redirect(url_for('main.dashboard'))
+        return redirect(referrer)
     
     except Exception as e:
         flash('An unexpected error occurred during upload. Please try again.', 'error')
         logger.error(f"Unexpected error in file upload: {e}")
-        return redirect(url_for('main.dashboard'))
+        return redirect(referrer if 'referrer' in locals() else url_for('main.dashboard'))
 
 @bp.route('/upload/validate', methods=['POST'])
 @login_required

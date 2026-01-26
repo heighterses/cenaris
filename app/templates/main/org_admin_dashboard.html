@@ -10,7 +10,7 @@
     <div class="d-flex gap-2">
       {% if can_manage_org %}
       <a class="btn btn-outline-primary" href="{{ url_for('main.organization_settings') }}">
-        <i class="bi bi-building me-2"></i>Organization Profile
+        <i class="bi bi-building me-2"></i>Organisation Profile
       </a>
       {% endif %}
     </div>
@@ -150,6 +150,7 @@
         <div class="col-12 col-md-4">
           <label class="form-label mb-1">Email</label>
           {{ invite_form.email() }}
+          <div class="form-text">Invitation link expires in {{ invite_expires_in }}.</div>
           {% if invite_form.email.errors %}
           <div class="text-danger small mt-1">{{ invite_form.email.errors[0] }}</div>
           {% endif %}
@@ -248,8 +249,8 @@
               <input type="text" class="form-control" id="deptNameInput" placeholder="e.g., Finance" autocomplete="off" />
             </div>
             <div class="mb-2">
-              <label class="form-label">Color</label>
-              <div class="d-flex flex-wrap gap-3" id="deptColorChoices" role="radiogroup" aria-label="Department color">
+              <label class="form-label">Colour</label>
+              <div class="d-flex flex-wrap gap-3" id="deptColorChoices" role="radiogroup" aria-label="Department colour">
                 <input class="btn-check" type="radio" name="deptColorChoice" id="deptColor_primary" value="primary" autocomplete="off" checked>
                 <label class="btn p-0 position-relative" for="deptColor_primary" aria-label="Blue" style="cursor: pointer;">
                   <span class="d-inline-block rounded-circle bg-primary border border-2" style="width: 32px; height: 32px;"></span>
@@ -318,8 +319,8 @@
               <input type="text" class="form-control" id="editDeptNameInput" placeholder="e.g., Finance" autocomplete="off" />
             </div>
             <div class="mb-2">
-              <label class="form-label">Color</label>
-              <div class="d-flex flex-wrap gap-3" id="editDeptColorChoices" role="radiogroup" aria-label="Department color">
+              <label class="form-label">Colour</label>
+              <div class="d-flex flex-wrap gap-3" id="editDeptColorChoices" role="radiogroup" aria-label="Department colour">
                 <input class="btn-check" type="radio" name="editDeptColorChoice" id="editDeptColor_primary" value="primary" autocomplete="off">
                 <label class="btn p-0 position-relative" for="editDeptColor_primary" aria-label="Blue" style="cursor: pointer;">
                   <span class="d-inline-block rounded-circle bg-primary border border-2" style="width: 32px; height: 32px;"></span>
@@ -385,7 +386,7 @@
 
         // Role select hover descriptions
         const ROLE_DESCRIPTIONS = {
-          'Organization Admin': 'Full access to organization settings, users, roles, and documents.',
+          'Organisation Admin': 'Full access to organisation settings, users, roles, and documents.',
           'Compliance Manager': 'Manage documents and export audits; cannot manage org settings/users.',
           'Auditor': 'Read-only access for audits and evidence review.',
           'Member': 'Standard member access (view and upload documents).',
@@ -655,6 +656,150 @@
               });
           });
         });
+
+        // === ROLE CHANGE (no reload) ===
+        document.addEventListener('DOMContentLoaded', () => {
+          document.querySelectorAll('form.role-change-form').forEach((formEl) => {
+            formEl.addEventListener('submit', (e) => {
+              e.preventDefault();
+
+              const submitBtn = formEl.querySelector('button[type="submit"]');
+              const originalHtml = submitBtn ? submitBtn.innerHTML : null;
+              if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating...';
+              }
+
+              const fd = new FormData(formEl);
+
+              fetch(formEl.action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: {
+                  'X-Requested-With': 'fetch',
+                  'Accept': 'application/json',
+                },
+              })
+                .then((r) => r.json().then((j) => ({ ok: r.ok, json: j })))
+                .then(({ ok, json }) => {
+                  if (!ok || !json?.success) {
+                    alert(json?.error || 'Failed to update role');
+                    return;
+                  }
+
+                  const membershipId = String(json.membership_id);
+                  const row = document.querySelector(`tr[data-membership-id="${membershipId}"]`);
+                  const roleCell = row?.querySelector('.member-role-cell');
+                  if (roleCell && json.new_role_name) {
+                    roleCell.textContent = json.new_role_name;
+                  }
+
+                  if (json.is_current_user && json.new_role_name) {
+                    const roleBadge = document.getElementById('activeRoleBadge');
+                    if (roleBadge) {
+                      roleBadge.textContent = json.new_role_name;
+                    }
+                  }
+
+                  const dropdownToggle = row?.querySelector('[data-bs-toggle="dropdown"]');
+                  if (dropdownToggle) {
+                    try {
+                      const dd = bootstrap.Dropdown.getInstance(dropdownToggle) || new bootstrap.Dropdown(dropdownToggle);
+                      dd.hide();
+                    } catch (err) {
+                      // ignore
+                    }
+                  }
+                })
+                .catch((err) => {
+                  console.error('Role update error:', err);
+                  alert('Network error. Please try again.');
+                })
+                .finally(() => {
+                  if (submitBtn) {
+                    submitBtn.disabled = false;
+                    if (originalHtml !== null) submitBtn.innerHTML = originalHtml;
+                  }
+                });
+            });
+          });
+        });
+
+        // === DEPARTMENT CHANGE (no reload) ===
+        document.addEventListener('DOMContentLoaded', () => {
+          document.querySelectorAll('form.department-change-form').forEach((formEl) => {
+            formEl.addEventListener('submit', (e) => {
+              e.preventDefault();
+
+              const submitBtn = formEl.querySelector('button[type="submit"]');
+              const originalHtml = submitBtn ? submitBtn.innerHTML : null;
+              if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating...';
+              }
+
+              const fd = new FormData(formEl);
+
+              fetch(formEl.action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: {
+                  'X-Requested-With': 'fetch',
+                  'Accept': 'application/json',
+                },
+              })
+                .then((r) => r.json().then((j) => ({ ok: r.ok, json: j })))
+                .then(({ ok, json }) => {
+                  if (!ok || !json?.success) {
+                    alert(json?.error || 'Failed to update department');
+                    return;
+                  }
+
+                  const membershipId = String(json.membership_id);
+                  const row = document.querySelector(`tr[data-membership-id="${membershipId}"]`);
+                  const deptCell = row?.querySelector('.member-department-cell');
+                  if (deptCell) {
+                    deptCell.innerHTML = '';
+                    const dept = json.department;
+                    if (dept?.name) {
+                      const color = (dept.color || 'primary').replace(/[^a-z]/g, '') || 'primary';
+                      const badge = document.createElement('span');
+                      badge.className = `badge bg-${color}`;
+                      badge.textContent = dept.name;
+                      deptCell.appendChild(badge);
+                    } else {
+                      const dash = document.createElement('span');
+                      dash.className = 'text-body-secondary';
+                      dash.textContent = '—';
+                      deptCell.appendChild(dash);
+                    }
+                  }
+
+                  const dropdownToggle = row?.querySelector('[data-bs-toggle="dropdown"]');
+                  if (dropdownToggle) {
+                    try {
+                      const dd = bootstrap.Dropdown.getInstance(dropdownToggle) || new bootstrap.Dropdown(dropdownToggle);
+                      dd.hide();
+                    } catch (err) {
+                      // ignore
+                    }
+                  }
+                })
+                .catch((err) => {
+                  console.error('Department update error:', err);
+                  alert('Network error. Please try again.');
+                })
+                .finally(() => {
+                  if (submitBtn) {
+                    submitBtn.disabled = false;
+                    if (originalHtml !== null) submitBtn.innerHTML = originalHtml;
+                  }
+                });
+            });
+          });
+        });
       })();
     </script>
 
@@ -673,15 +818,15 @@
           </thead>
           <tbody>
             {% for m in members %}
-            <tr>
+            <tr data-membership-id="{{ m.id }}" data-user-id="{{ m.user_id }}">
               <td class="px-3">
                 {{ m.user.email }}
                 {% if m.user.full_name %}
                 <div class="text-body-secondary small">{{ m.user.full_name }}</div>
                 {% endif %}
               </td>
-              <td>{{ m.display_role_name }}</td>
-              <td>
+              <td class="member-role-cell">{{ m.display_role_name }}</td>
+              <td class="member-department-cell">
                 {% if m.department %}
                   <span class="badge bg-{{ m.department.color }}">{{ m.department.name }}</span>
                 {% else %}
@@ -710,23 +855,50 @@
                   <button class="btn btn-sm btn-link text-body-secondary p-0" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-label="Actions">
                     <i class="bi bi-three-dots-vertical"></i>
                   </button>
-                  <ul class="dropdown-menu dropdown-menu-end" style="position: absolute;">
+                  <ul class="dropdown-menu dropdown-menu-end shadow" style="position: fixed; z-index: 1050;">
                     {% if can_manage_roles and m.is_active and available_roles %}
-                      <li class="px-3 py-2" style="min-width: 220px;">
-                        <div class="text-body-secondary small mb-1">Change role</div>
-                        <form method="post" action="{{ url_for('main.org_admin_update_member_role') }}" class="d-grid gap-2">
+                      <li class="px-3 py-2" style="min-width: 250px;">
+                        <div class="text-body-secondary small mb-2 fw-semibold">Change role</div>
+                        <form method="post" action="{{ url_for('main.org_admin_update_member_role') }}" class="role-change-form">
                           {{ update_role_form.csrf_token }}
                           <input type="hidden" name="membership_id" value="{{ m.id }}" />
-                          <select name="role_id" class="form-select form-select-sm">
-                            {% for r in available_roles %}
-                              <option value="{{ r.id }}" {% if m.role_id and (r.id == m.role_id) %}selected{% endif %}>{{ r.name }}</option>
-                            {% endfor %}
-                          </select>
-                          <button type="submit" class="btn btn-sm btn-primary">Update</button>
+                          <div class="mb-2">
+                            <select name="role_id" class="form-select form-select-sm">
+                              {% for r in available_roles %}
+                                <option value="{{ r.id }}" {% if m.role_id and (r.id == m.role_id) %}selected{% endif %}>{{ r.name }}</option>
+                              {% endfor %}
+                            </select>
+                          </div>
+                          <button type="submit" class="btn btn-sm btn-primary w-100">
+                            <i class="bi bi-check2 me-1"></i>Update Role
+                          </button>
                         </form>
                       </li>
                       <li><hr class="dropdown-divider" /></li>
                     {% endif %}
+
+                    {% if m.is_active and departments %}
+                      <li class="px-3 py-2" style="min-width: 250px;">
+                        <div class="text-body-secondary small mb-2 fw-semibold">Change department</div>
+                        <form method="post" action="{{ url_for('main.org_admin_update_member_department') }}" class="department-change-form">
+                          {{ update_department_form.csrf_token }}
+                          <input type="hidden" name="membership_id" value="{{ m.id }}" />
+                          <div class="mb-2">
+                            <select name="department_id" class="form-select form-select-sm">
+                              <option value="" {% if not m.department_id %}selected{% endif %}>Unassigned</option>
+                              {% for d in departments %}
+                                <option value="{{ d.id }}" {% if m.department_id and (d.id == m.department_id) %}selected{% endif %}>{{ d.name }}</option>
+                              {% endfor %}
+                            </select>
+                          </div>
+                          <button type="submit" class="btn btn-sm btn-primary w-100">
+                            <i class="bi bi-check2 me-1"></i>Update Department
+                          </button>
+                        </form>
+                      </li>
+                      <li><hr class="dropdown-divider" /></li>
+                    {% endif %}
+
                     {% if m.id in _pending_ids %}
                       <li>
                         <form method="post" action="{{ url_for('main.org_admin_resend_invite') }}" class="d-inline">
@@ -770,12 +942,12 @@
                     {% elif m.is_active and (m.user.id == current_user.id) %}
                       {% if can_current_user_leave_org %}
                         <li>
-                          <form method="post" action="{{ url_for('main.org_admin_remove_member') }}" class="d-inline" onsubmit="return confirm('Leave this organization? You will lose access to its data.');">
+                          <form method="post" action="{{ url_for('main.org_admin_remove_member') }}" class="d-inline" onsubmit="return confirm('Leave this organisation? You will lose access to its data.');">
                             {{ member_action_form.csrf_token }}
                             {{ member_action_form.membership_id(value=m.id) }}
                             {{ member_action_form.action(value='delete') }}
                             <button type="submit" class="dropdown-item text-danger">
-                              <i class="bi bi-box-arrow-right me-2"></i>Leave organization
+                              <i class="bi bi-box-arrow-right me-2"></i>Leave organisation
                             </button>
                           </form>
                         </li>

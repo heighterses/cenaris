@@ -33,21 +33,30 @@ class LoginForm(FlaskForm):
 class RegisterForm(FlaskForm):
     """Registration form (creates org workspace + admin)."""
 
-    organization_name = StringField('Legal Organization Name', validators=[
-        DataRequired(message='Organization name is required.'),
-        Length(min=2, max=100, message='Organization name must be between 2 and 100 characters.')
+    organization_name = StringField('Legal Organisation Name', validators=[
+        DataRequired(message='Organisation name is required.'),
+        Length(min=2, max=100, message='Organisation name must be between 2 and 100 characters.')
     ], render_kw={
         'class': 'form-control form-control-lg',
-        'placeholder': 'Legal organization name',
+        'placeholder': 'Legal organisation name',
         'autocomplete': 'organization'
     })
 
-    abn = StringField('ABN / ACN', validators=[
-        DataRequired(message='ABN / ACN is required.'),
-        Length(max=20, message='ABN / ACN must be less than 20 characters.')
+    abn = StringField('ABN (required)', validators=[
+        DataRequired(message='ABN is required.'),
+        Length(max=20, message='ABN must be less than 20 characters.')
     ], render_kw={
         'class': 'form-control form-control-lg',
-        'placeholder': 'ABN / ACN',
+        'placeholder': 'ABN',
+        'autocomplete': 'off'
+    })
+
+    acn = StringField('ACN (optional)', validators=[
+        Optional(),
+        Length(max=20, message='ACN must be less than 20 characters.')
+    ], render_kw={
+        'class': 'form-control form-control-lg',
+        'placeholder': 'ACN (optional)',
         'autocomplete': 'off'
     })
     first_name = StringField('First Name', validators=[
@@ -77,12 +86,21 @@ class RegisterForm(FlaskForm):
         'autocomplete': 'organization-title'
     })
 
-    mobile_number = StringField('Mobile Number (optional)', validators=[
-        Optional(),
-        Length(max=40, message='Mobile number must be 40 characters or less.')
+    mobile_number = StringField('Mobile Phone (required)', validators=[
+        DataRequired(message='Mobile phone is required.'),
+        Length(max=40, message='Mobile phone must be 40 characters or less.')
     ], render_kw={
         'class': 'form-control form-control-lg',
-        'placeholder': 'Optional (for security alerts / MFA later)',
+        'placeholder': 'Mobile phone',
+        'autocomplete': 'tel'
+    })
+
+    work_phone = StringField('Work Phone (optional)', validators=[
+        Optional(),
+        Length(max=40, message='Work phone must be 40 characters or less.')
+    ], render_kw={
+        'class': 'form-control form-control-lg',
+        'placeholder': 'Work phone (optional)',
         'autocomplete': 'tel'
     })
 

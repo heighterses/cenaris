@@ -17,6 +17,26 @@ from app import db, oauth, mail, limiter
 _RESEND_VERIFY_EMAIL_COOLDOWN_SECONDS = 60
 _RESET_PASSWORD_REQUEST_COOLDOWN_SECONDS = 60
 
+_PASSWORD_RESET_TOKEN_SALT = 'password-reset'
+_ORG_INVITE_TOKEN_SALT = 'org-invite'
+
+
+def _safe_int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name) or default)
+    except Exception:
+        return default
+
+
+def _password_reset_token_ttl_seconds() -> int:
+    # Default 1 hour for security.
+    return max(60, _safe_int_env('PASSWORD_RESET_TOKEN_TTL_SECONDS', 60 * 60))
+
+
+def _org_invite_token_ttl_seconds() -> int:
+    # Default 24 hours so invited users have time to accept.
+    return max(60, _safe_int_env('ORG_INVITE_TOKEN_TTL_SECONDS', 60 * 60 * 24))
+
 _LOGIN_LOCKOUT_THRESHOLD = 5
 _LOGIN_LOCKOUT_SECONDS = 60 * 15
 _FAILED_LOGIN_WINDOW_SECONDS = 60 * 30
@@ -114,12 +134,16 @@ def _serializer() -> URLSafeTimedSerializer:
 
 
 def _password_reset_token(user: User) -> str:
-    return _serializer().dumps({'user_id': user.id, 'email': user.email}, salt='password-reset')
+    return _serializer().dumps({'user_id': user.id, 'email': user.email}, salt=_PASSWORD_RESET_TOKEN_SALT)
 
 
-def _verify_password_reset_token(token: str, max_age_seconds: int = 3600) -> dict | None:
+def _org_invite_token(user: User) -> str:
+    return _serializer().dumps({'user_id': user.id, 'email': user.email}, salt=_ORG_INVITE_TOKEN_SALT)
+
+
+def _verify_timed_token(token: str, *, salt: str, max_age_seconds: int) -> dict | None:
     try:
-        data = _serializer().loads(token, salt='password-reset', max_age=max_age_seconds)
+        data = _serializer().loads(token, salt=salt, max_age=max_age_seconds)
         if not isinstance(data, dict):
             return None
         if 'user_id' not in data or 'email' not in data:
@@ -127,6 +151,27 @@ def _verify_password_reset_token(token: str, max_age_seconds: int = 3600) -> dic
         return data
     except (BadSignature, SignatureExpired):
         return None
+
+
+def _verify_password_reset_token(token: str, max_age_seconds: int = 3600) -> dict | None:
+    return _verify_timed_token(token, salt=_PASSWORD_RESET_TOKEN_SALT, max_age_seconds=max_age_seconds)
+
+
+def _verify_reset_or_invite_token(token: str) -> dict | None:
+    # Accept both org invites (24h default) and password reset links (1h default).
+    # Try invite first so users clicking invite links get the longer TTL.
+    data = _verify_timed_token(
+        token,
+        salt=_ORG_INVITE_TOKEN_SALT,
+        max_age_seconds=_org_invite_token_ttl_seconds(),
+    )
+    if data:
+        return data
+    return _verify_timed_token(
+        token,
+        salt=_PASSWORD_RESET_TOKEN_SALT,
+        max_age_seconds=_password_reset_token_ttl_seconds(),
+    )
 
 
 def _mail_configured() -> bool:
@@ -543,10 +588,12 @@ def signup():
 
         org_name = form.organization_name.data.strip()
         abn = (form.abn.data or '').strip()
+        acn = (form.acn.data or '').strip() or None
         first_name = (form.first_name.data or '').strip()
         last_name = (form.last_name.data or '').strip()
         title = (form.title.data or '').strip()
         mobile_number = (form.mobile_number.data or '').strip() or None
+        work_phone = (form.work_phone.data or '').strip() or None
         time_zone = (form.time_zone.data or '').strip() or 'Australia/Sydney'
         email = form.email.data.lower().strip()
         password = form.password.data
@@ -555,6 +602,7 @@ def signup():
             organization = Organization(
                 name=org_name,
                 abn=abn,
+                acn=acn,
                 contact_email=email,
             )
             db.session.add(organization)
@@ -588,6 +636,7 @@ def signup():
                 last_name=last_name,
                 title=title,
                 mobile_number=mobile_number,
+                work_phone=work_phone,
                 time_zone=time_zone,
                 full_name=(f"{first_name} {last_name}").strip(),
                 organization_id=organization.id,
@@ -712,7 +761,7 @@ def reset_password(token):
     if current_user.is_authenticated:
         return _after_login_redirect()
 
-    data = _verify_password_reset_token(token)
+    data = _verify_reset_or_invite_token(token)
     if not data:
         flash('This reset link is invalid or has expired. Please request a new one.', 'error')
         return redirect(url_for('auth.forgot_password'))
