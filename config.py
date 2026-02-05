@@ -94,6 +94,22 @@ class Config:
     # ML/ADLS summary is not shipped yet; keep disabled unless explicitly enabled.
     ML_SUMMARY_ENABLED = (os.environ.get('ML_SUMMARY_ENABLED') or '0').strip().lower() in {'1', 'true', 'yes', 'on'}
     
+    # Azure Application Insights (Milestone 2: System Logging)
+    APPINSIGHTS_CONNECTION_STRING = os.environ.get('APPLICATIONINSIGHTS_CONNECTION_STRING')
+    APPINSIGHTS_ENABLED = bool(APPINSIGHTS_CONNECTION_STRING)
+    
+    # Logging Configuration
+    LOG_LEVEL = os.environ.get('LOG_LEVEL') or 'INFO'
+    LOG_RETENTION_DAYS = int(os.environ.get('LOG_RETENTION_DAYS') or 90)
+    
+    # Security Event Logging
+    LOG_SECURITY_EVENTS = True   # Always log security events
+    LOG_ACCESS_EVENTS = True     # Re-enabled with OpenTelemetry SDK (Python 3.13 compatible)
+    
+    # Alert Configuration (Free code-based alerts - Milestone 2)
+    ALERTS_ENABLED = (os.environ.get('ALERTS_ENABLED') or 'false').strip().lower() in {'1', 'true', 'yes', 'on'}
+    ALERT_EMAILS = os.environ.get('ALERT_EMAILS') or ''  # Comma-separated list of emails
+    
     @staticmethod
     def init_app(app):
         pass

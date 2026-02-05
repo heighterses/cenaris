@@ -355,7 +355,7 @@ def switch_organization():
 @bp.route('/org/admin')
 @login_required
 def org_admin_dashboard():
-    """Organization admin overview."""
+    """Organisation admin overview."""
     maybe = _require_org_admin()
     if maybe is not None:
         return maybe
@@ -2488,3 +2488,130 @@ def generate_report(report_type):
         import traceback
         traceback.print_exc()
         return f"Error generating report: {str(e)}", 500
+
+
+@bp.route('/system-logs')
+@login_required
+def system_logs():
+    """System logs viewing interface (organisation admin only)."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    
+    # Check if user is admin or has org.settings permission
+    from app.models import OrganizationMembership
+    org_member = OrganizationMembership.query.filter_by(
+        user_id=current_user.id,
+        organization_id=org_id
+    ).first()
+    
+    # Allow if user is org admin or has explicit org.settings permission
+    if not (org_member and (org_member.role == 'Admin' or current_user.has_permission('org.settings', org_id=int(org_id)))):
+        flash('You must be an organisation administrator to view system logs.', 'error')
+        return redirect(url_for('main.dashboard'))
+    
+    # Get filter parameters
+    log_type = request.args.get('log_type', 'all')
+    event_type = request.args.get('event_type', '')
+    time_range = request.args.get('time_range', '24h')
+    user_id_filter = request.args.get('user_id', '')
+    
+    # Parse time range
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    time_ranges = {
+        '1h': timedelta(hours=1),
+        '24h': timedelta(hours=24),
+        '7d': timedelta(days=7),
+        '30d': timedelta(days=30),
+    }
+    time_delta = time_ranges.get(time_range, timedelta(hours=24))
+    start_time = now - time_delta
+    
+    logs = []
+
+    # NOTE: We currently back System Logs with persisted DB events.
+    # `LoginEvent` captures login success/failure, and we scope to the active organisation
+    # by selecting events for users who are members of that organisation.
+    if log_type in ['all', 'security']:
+        from app.models import LoginEvent
+        from sqlalchemy import desc
+
+        member_ids = [m.user_id for m in OrganizationMembership.query.filter_by(organization_id=org_id).all()]
+
+        if member_ids:
+            q = LoginEvent.query.filter(LoginEvent.user_id.in_(member_ids))
+            if start_time is not None:
+                q = q.filter(LoginEvent.created_at >= start_time)
+
+            if (user_id_filter or '').strip():
+                try:
+                    q = q.filter(LoginEvent.user_id == int(user_id_filter))
+                except Exception:
+                    pass
+
+            if (event_type or '').strip() == 'LOGIN_SUCCESS':
+                q = q.filter(LoginEvent.success.is_(True))
+            elif (event_type or '').strip() == 'LOGIN_FAILURE':
+                q = q.filter(LoginEvent.success.is_(False))
+
+            events = q.order_by(desc(LoginEvent.created_at)).limit(500).all()
+            for evt in events:
+                created_at = evt.created_at
+                if created_at and getattr(created_at, 'tzinfo', None) is None:
+                    created_at = created_at.replace(tzinfo=timezone.utc)
+
+                is_success = bool(evt.success)
+                derived_event_type = 'LOGIN_SUCCESS' if is_success else 'LOGIN_FAILURE'
+                derived_description = 'User logged in successfully' if is_success else 'Failed login attempt'
+
+                user_name = None
+                user_email = None
+                if getattr(evt, 'user', None) is not None:
+                    try:
+                        user_name = evt.user.display_name()
+                    except Exception:
+                        user_name = None
+                    user_email = getattr(evt.user, 'email', None)
+
+                logs.append({
+                    'timestamp': created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else None,
+                    'log_type': 'security',
+                    'event_type': derived_event_type,
+                    'event_description': derived_description,
+                    'user_id': evt.user_id,
+                    'user_name': user_name,
+                    'user_email': user_email or evt.email,
+                    'organization_id': org_id,
+                    'ip_address': evt.ip_address,
+                    'details': {
+                        'email': evt.email,
+                        'provider': evt.provider,
+                        'success': is_success,
+                        'reason': evt.reason,
+                        'user_agent': evt.user_agent,
+                    }
+                })
+    
+    # Statistics
+    total_logs = len(logs)
+    security_events = len([l for l in logs if l.get('log_type') == 'security'])
+    error_count = len([l for l in logs if l.get('log_type') == 'error'])
+    failed_logins = len([l for l in logs if l.get('event_type') == 'LOGIN_FAILURE'])
+    
+    appinsights_enabled = current_app.config.get('APPINSIGHTS_ENABLED', False)
+    
+    return render_template('main/system_logs.html',
+                         title='System Logs',
+                         logs=logs,
+                         log_type=log_type,
+                         event_type=event_type,
+                         time_range=time_range,
+                         user_id=user_id_filter,
+                         total_logs=total_logs,
+                         security_events=security_events,
+                         error_count=error_count,
+                         failed_logins=failed_logins,
+                         appinsights_enabled=appinsights_enabled)
